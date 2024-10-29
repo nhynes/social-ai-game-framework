@@ -1,23 +1,19 @@
+import os
 import asyncio
 import logging
-from dotenv import load_dotenv
-import os
 
-from anthropic import AsyncAnthropic
-from openai import AsyncOpenAI
+from dotenv import load_dotenv
 import discord
 
-from bot import MessageBot
+from bot import Bot
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("discord_bot")
+logger = logging.getLogger("main")
 
 
 async def main():
-    anthropic = AsyncAnthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-    openai = AsyncOpenAI(api_key=os.environ["OPENAI_API_KEY"])
-    async with MessageBot(anthropic=anthropic, openai=openai) as bot:
+    async with Bot() as bot:
         try:
             await bot.start(os.environ["DISCORD_TOKEN"])
         except discord.LoginFailure:

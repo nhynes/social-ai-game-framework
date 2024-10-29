@@ -5,18 +5,19 @@ from discord import app_commands
 from discord.ext import commands
 import discord
 
-from bot import MessageBot
-from guild_state import GuildState
+from bot import Bot, GuildState
+from game import Frontend
 
 
 class Options(Enum):
     world = "world"
     inventory = "inventory"
+    rules = "rules"
 
 
 class ShowCommands(commands.Cog):
     def __init__(self, bot):
-        self.bot: MessageBot = bot
+        self.bot: Bot = bot
 
     @app_commands.command()
     async def show(self, interaction: discord.Interaction, option: Options):
@@ -25,6 +26,13 @@ class ShowCommands(commands.Cog):
 
         guild_state = self.bot.guild_states.get(interaction.guild.id)
         if not guild_state:
+            return
+
+        if option == Options.rules:
+            await interaction.response.send_message(
+                "This feature is not yet implemented, but will eventually show public game rules",
+                ephemeral=True,
+            )
             return
 
         items = (
@@ -44,17 +52,13 @@ class ShowCommands(commands.Cog):
 
 
 def _get_world_state_items(guild_state: GuildState) -> Iterable[str]:
-    return guild_state.world_state
+    return guild_state.game_engine.world_state
 
 
 def _get_inventory_items(
     guild_state: GuildState, upstream_user_id: int
 ) -> Iterable[str]:
-    with guild_state.db.connect() as db:
-        user = db.get_user(upstream_user_id)
-        if not user:
-            return []
-    return guild_state.player_inventories.get(user.id, set())
+    return guild_state.game_engine.player_inventory(Frontend.discord, upstream_user_id)
 
 
 def _paginate(items: Iterable[str], max_chars=4000) -> List[str]:

@@ -1,26 +1,27 @@
 from textwrap import dedent
-from typing import Dict, List, Optional, Set, Type, Union
+from typing import Dict, Iterable, Optional, Type, Union
 
 import openai
 import openai.types.chat
 from pydantic import BaseModel
 import anthropic.types
 
-from fun_game.database import SimpleMessage
+from .database import SimpleMessage
 
 
 FILTER_SYSTEM_PROMPT = """
-The following user message is from a Discord channel. The channel contains messages meant for either
+The user message is from a general discussion channel. The channel contains messages meant for either:
 
-- a world building simulation game that responds to natural language, or
-- other users
+a) a world building simulation game that responds to natural language, or
+b) other users in the channel who may be talking with each other about the simulator and its responses.
 
-Your task is to determine whether to pass the message to the (expensive) simulator. Only admit messages that should be forwarded to the simulator.
+Your task is to determine whether to forward the message to the (somewhat expensive) simulator or not forward the message and do nothing. Message in category (a) must be forwarded while messages in category (b) should not be forwarded.
 
 Respond with ONLY valid JSON in the following format WITHOUT code fence or anything else:
 
 ```
 type Response = {
+    // Whether the message is in category (a) and should be forwarded
     forward: boolean;
 
     // A float from 0-1 describing how confident you are in your decision. 1 is perfectly certain, 0 is perfectly uncertain.
@@ -43,6 +44,7 @@ Forward things like these:
 - "You said earlier 'Any other species that may exist would need to be discovered through careful observation rather than by assertion.'"
 - "I get naked to assert dominance"
 - "I call the creature slurs while shadowboxing"
+- "I destroy the green monolith"
 - anything with @1299971778457636864
 
 Do not forward things like these:
@@ -50,7 +52,6 @@ Do not forward things like these:
 - "Fuck you"
 - "What is this nerd shit"
 - "okay let's try this again. I put claude-3-haiku in front of claude-3.5-sonnet to filter out the racist spam"
-- "I'll increase your higgs field 🤡"
 - "database is locked"
 - "@ieyasu feel free to make the channel public now"
 - "the?"
@@ -177,10 +178,10 @@ The response would be like
 
 
 def make_game_system_prompt(
-    world_state: Set[str],
+    world_state: Iterable[str],
     player_name: str,
-    player_inventory: Set[str],
-    context: List[SimpleMessage],
+    player_inventory: Iterable[str],
+    context: Iterable[SimpleMessage],
     sudo: Optional[bool] = False,
 ) -> str:
     components = [GAME_SYSTEM_PROMPT]

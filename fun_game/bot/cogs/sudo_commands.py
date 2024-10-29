@@ -9,30 +9,37 @@ class SudoCommands(commands.Cog):
 
     sudo_group = app_commands.Group(name="sudo", description="Admin commands")
     rule_group = app_commands.Group(
-        name="rule", parent=sudo_group, description="Manage rules"
+        name="rules", parent=sudo_group, description="Manage rules"
     )
     state_group = app_commands.Group(
         name="state", parent=sudo_group, description="Manage state"
     )
 
+    @rule_group.command(name="show")
+    async def show_rules(self, interaction: discord.Interaction, rule: str):
+        # Show all rules (even hidden ones) in an ephemeral message
+        pass
+
+    @rule_group.command(name="edit")
+    async def edit_rules(self, interaction: discord.Interaction, rule: str):
+        # Replace the current set of rules with what is pasted in (likely based on `/sudo rules show`)
+        pass
+
     @rule_group.command(name="add")
     async def add_rule(self, interaction: discord.Interaction, rule: str):
-        # Add rule logic
+        # There should be some way to specify whether the rule is public or private
         pass
 
     @rule_group.command(name="remove")
     async def remove_rule(self, interaction: discord.Interaction, rule: str):
-        # Remove rule logic
         pass
 
     @state_group.command(name="add")
     async def add_state(self, interaction: discord.Interaction, state: str):
-        # Add state logic
         pass
 
     @state_group.command(name="remove")
     async def remove_state(self, interaction: discord.Interaction, state: str):
-        # Remove state logic
         pass
 
 

@@ -41,15 +41,17 @@ class DatabaseConnection:
 
     def get_or_create_user(self, upstream_id: int, display_name: str) -> User:
         self.cursor.execute(
-            "INSERT OR IGNORE INTO users (username, upstream_id) VALUES (?, ?)",
+            """
+            INSERT INTO users (username, upstream_id)
+            VALUES (?, ?)
+            ON CONFLICT(upstream_id)
+            DO UPDATE SET username = excluded.username
+            RETURNING id
+            """,
             (display_name, upstream_id),
         )
-        self.cursor.execute(
-            "SELECT id FROM users WHERE upstream_id = ?", (upstream_id,)
-        )
-        return User(
-            id=self.cursor.fetchone()["id"], upstream_id=upstream_id, name=display_name
-        )
+        user_id = self.cursor.fetchone()["id"]
+        return User(id=user_id, upstream_id=upstream_id, name=display_name)
 
     def get_user(self, upstream_id: int) -> Optional[User]:
         self.cursor.execute("SELECT * FROM users WHERE upstream_id = ?", (upstream_id,))
@@ -319,8 +321,8 @@ class Database:
 
                 CREATE TABLE IF NOT EXISTS users (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    username TEXT UNIQUE NOT NULL,
-                    upstream_id INTEGER,
+                    username TEXT,
+                    upstream_id INTEGER UNIQUE NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
                 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);

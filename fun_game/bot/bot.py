@@ -2,29 +2,24 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
 
 import discord
 from discord.ext import commands
-from anthropic import AsyncAnthropic
-from openai import AsyncOpenAI
 
-from guild_state import GuildState
-
-if TYPE_CHECKING:
-    from cogs.message_handler import MessageHandler
-
-logger = logging.getLogger("discord_bot")
-
+from .guild_state import GuildState
 
 COMMAND_PREFIX = "/"
 
+logger = logging.getLogger("bot")
 
-class MessageBot(commands.Bot):
-    def __init__(self, anthropic: AsyncAnthropic, openai: AsyncOpenAI):
+
+class Bot(commands.Bot):
+    def __init__(self):
         intents = discord.Intents.default()
         intents.message_content = True
-        intents.reactions
+        intents.messages = True
+        intents.guilds = True
+        intents.reactions = True
 
         super().__init__(
             command_prefix=COMMAND_PREFIX,
@@ -32,10 +27,7 @@ class MessageBot(commands.Bot):
             proxy=os.environ.get("HTTPS_PROXY"),
         )
 
-        self.anthropic = anthropic
-        self.openai = openai
         self.guild_states: dict[int, GuildState] = {}
-        self.message_handler: Optional[MessageHandler] = None
         self.ensure_data_directory()
 
     @staticmethod
@@ -43,11 +35,11 @@ class MessageBot(commands.Bot):
         Path("data").mkdir(exist_ok=True)
 
     async def setup_hook(self):
-        self.message_handler = await self.load_extension("cogs.message_handler")
         for ext in [
-            "cogs.sudo_commands",
-            "cogs.show_commands",
-            "cogs.reaction_handler",
+            "bot.cogs.message_handler",
+            "bot.cogs.sudo_commands",
+            "bot.cogs.show_commands",
+            "bot.cogs.reaction_handler",
         ]:
             await self.load_extension(ext)
         await self.tree.sync()
@@ -58,13 +50,7 @@ class MessageBot(commands.Bot):
             await self.on_guild_join(guild)
 
     async def on_guild_join(self, guild):
-        await self.initialize_guild(guild)
-        if self.message_handler:
-            self.loop.create_task(self.message_handler.start_processing(guild.id))
-
-    async def initialize_guild(self, guild: discord.Guild):
         guild_state = GuildState(guild.id)
-        await guild_state.initialize()
 
         # Look for existing channel
         channel = discord.utils.get(guild.channels, id=1300287188365475940)
