@@ -6,16 +6,15 @@ from typing import Iterable
 import discord
 from discord.ext import commands
 
-from fun_game.game.engine import Frontend
-from game import GameContext
-from bot import Bot, GuildState
+from ...game import GameContext, Frontend
+from ..bot import Bot, GuildState
 
 logger = logging.getLogger("bot.cogs.message_handler")
 logger.setLevel(logging.DEBUG)
 
 
 class MessageHandler(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: Bot):
         self.bot: Bot = bot
         self._processing = False
 
@@ -63,7 +62,7 @@ class MessageHandler(commands.Cog):
             "received message from %s: %s", message.author.display_name, message.content
         )
         context = GameContext(
-            format=Frontend.discord,
+            frontend=Frontend.DISCORD,
             user_id=message.author.id,
             user_name=message.author.display_name,
             message_content=message.content,

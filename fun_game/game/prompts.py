@@ -1,5 +1,5 @@
 from textwrap import dedent
-from typing import Dict, Iterable, Optional, Type, Union
+from typing import Iterable, Optional, Type, Union
 
 import openai
 import openai.types.chat
@@ -9,6 +9,7 @@ import anthropic.types
 from .database import SimpleMessage
 
 
+# pylint: disable=line-too-long
 FILTER_SYSTEM_PROMPT = """
 The user message is from a general discussion channel. The channel contains messages meant for either:
 
@@ -64,6 +65,7 @@ class FilterModelResponse(BaseModel):
     confidence: float
 
 
+# pylint: disable=line-too-long
 GAME_SYSTEM_PROMPT = """You are a multiplayer RPG simulation engine that processes player attempts to complete tasks. Core principles:
 
 WORLD PROPERTIES:
@@ -224,7 +226,7 @@ def make_game_system_prompt(
     if sudo:
         components.append(
             dedent(
-                f"""
+                """
                 You are currently processing messages from the game designer.
                 The game designer is allowed to request arbitary changes to the world.
                 Accommodate the requests in the most seamless way possible given the existing world state.
@@ -242,7 +244,7 @@ def make_game_system_prompt(
 # A patch set.
 # The key is the contents of an item to add or remove.
 # The corresponding value is whether to add or remove the item.
-Changes = Dict[str, bool]
+Changes = dict[str, bool]
 
 
 class GameModelResponse(BaseModel):

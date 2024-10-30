@@ -1,37 +1,9 @@
-from dataclasses import dataclass
 import sqlite3
 from contextlib import contextmanager
-from typing import Dict, Generator, List, Literal, Optional, Set
+from typing import Generator, Optional
 import time
 
-
-@dataclass
-class SimpleMessage:
-    id: int
-    sender: str
-    sender_id: int
-    content: str
-
-
-MessageStatus = Literal["filtered", "unfiltered", "irrelevant", "sudo"]
-
-
-@dataclass
-class Message:
-    id: int
-    upstream_id: Optional[int]
-    sender_id: int
-    content: str
-    reply_to: int
-    created_at: str
-    status: MessageStatus
-
-
-@dataclass
-class User:
-    id: int
-    upstream_id: int
-    name: str
+from .models import Frontend, Message, MessageStatus, SimpleMessage, User
 
 
 class DatabaseConnection:
@@ -39,26 +11,38 @@ class DatabaseConnection:
         self.conn = conn
         self.cursor = conn.cursor()
 
-    def get_or_create_user(self, upstream_id: int, display_name: str) -> User:
+    def get_or_create_user(
+        self, frontend: Frontend, upstream_id: int, display_name: str
+    ) -> User:
         self.cursor.execute(
             """
             INSERT INTO users (username, upstream_id)
-            VALUES (?, ?)
-            ON CONFLICT(upstream_id)
+            VALUES (?, ?, ?)
+            ON CONFLICT(frontend, upstream_id)
             DO UPDATE SET username = excluded.username
             RETURNING id
             """,
-            (display_name, upstream_id),
+            (display_name, frontend, upstream_id),
         )
         user_id = self.cursor.fetchone()["id"]
-        return User(id=user_id, upstream_id=upstream_id, name=display_name)
+        return User(
+            id=user_id, frontend=frontend, upstream_id=upstream_id, name=display_name
+        )
 
-    def get_user(self, upstream_id: int) -> Optional[User]:
-        self.cursor.execute("SELECT * FROM users WHERE upstream_id = ?", (upstream_id,))
+    def get_user(self, frontend: Frontend, upstream_id: int) -> Optional[User]:
+        self.cursor.execute(
+            "SELECT * FROM users WHERE frontend = ? AND upstream_id = ?",
+            (frontend, upstream_id),
+        )
         row = self.cursor.fetchone()
         if not row:
             return None
-        return User(id=row["id"], upstream_id=upstream_id, name=row["username"])
+        return User(
+            id=row["id"],
+            frontend=frontend,
+            upstream_id=upstream_id,
+            name=row["username"],
+        )
 
     def get_or_create_item(self, item_name: str) -> int:
         self.cursor.execute(
@@ -71,7 +55,7 @@ class DatabaseConnection:
         self,
         reply_to: Optional[int],
         size: int = 10,
-    ) -> List[SimpleMessage]:
+    ) -> list[SimpleMessage]:
         """
         Returns messages that are contextual to the present one.
 
@@ -79,7 +63,7 @@ class DatabaseConnection:
             user_id: The ID of the user who sent the message
             reply_to: The id of the message being replied to, if any. `size` and `duration` start from here.
             size: The number of messages to return, inclusive of the reply_to message, if provided.
-            max_age: The maximum duration in seconds from the reply_to message (or now) for which messages will be included
+            max_age: The maximum duration in seconds from now/reply_to message for which messages will be included
         """
         seen_messages = set()
         messages = []
@@ -88,7 +72,10 @@ class DatabaseConnection:
             if not remaining_size:
                 return
 
-            status_condition = "(m.status IS NULL OR (m.status != 'irrelevant' AND m.status != 'filtered'))"
+            status_condition = f"""(
+                m.status IS NULL OR
+                (m.status != '{MessageStatus.IRRELEVANT.value}'
+                 AND m.status != '{MessageStatus.FILTERED.value}'))"""
 
             if msg_id is None:
                 # Fetch recent messages
@@ -154,52 +141,59 @@ class DatabaseConnection:
         self,
         content: str,
         sender_id: int,
+        frontend: Frontend,
         upstream_id: Optional[int] = None,
         reply_to_id: Optional[int] = None,
         filtered: Optional[bool] = False,
     ) -> int:
         self.cursor.execute(
-            """INSERT INTO messages (content, sender_id, upstream_id, reply_to_id, status)
+            """INSERT INTO messages (content, sender_id, frontend, upstream_id, reply_to_id, status)
                VALUES (?, ?, ?, ?, ?)""",
             (
                 content,
                 sender_id,
+                frontend,
                 upstream_id,
                 reply_to_id,
-                "filtered" if filtered else None,
+                MessageStatus.FILTERED.value if filtered else None,
             ),
         )
         assert self.cursor.lastrowid
         return self.cursor.lastrowid
 
-    def mark_message_sent(self, id: int, upstream_id: int):
+    def mark_message_sent(self, message_id: int, upstream_id: int):
         self.cursor.execute(
             "UPDATE messages SET upstream_id = ? WHERE id = ?",
-            (upstream_id, id),
+            (upstream_id, message_id),
         )
 
-    def unfilter_message(self, id: int):
+    def unfilter_message(self, message_id: int):
         self.cursor.execute(
-            "UPDATE messages SET status = 'unfiltered' WHERE id = ? AND status = 'filtered'",
-            (id,),
+            f"""
+            UPDATE messages SET status = '{MessageStatus.UNFILTERED.value}'
+            WHERE id = ? AND status = '{MessageStatus.FILTERED.value}'
+            """,
+            (message_id,),
         )
 
-    def mark_message_irrelevant(self, id: int):
+    def mark_message_irrelevant(self, message_id: int):
         self.cursor.execute(
             "UPDATE messages SET status = 'irrelevant' WHERE id = ?",
-            (id,),
+            (message_id,),
         )
 
-    def get_message(self, upstream_id: int) -> Optional[Message]:
+    def get_message(self, frontend: Frontend, upstream_id: int) -> Optional[Message]:
         self.cursor.execute(
-            "SELECT * FROM messages WHERE upstream_id = ?", (upstream_id,)
+            "SELECT * FROM messages WHERE frontend = ? AND upstream_id = ?",
+            (frontend, upstream_id),
         )
         row = self.cursor.fetchone()
         if not row:
             return None
         return Message(
             id=row["id"],
-            upstream_id=row["upstream_id"],
+            frontend=frontend,
+            upstream_id=upstream_id,
             sender_id=row["sender_id"],
             content=row["content"],
             reply_to=row["reply_to_id"],
@@ -210,9 +204,9 @@ class DatabaseConnection:
     def update_game_state(
         self,
         user_id: int,
-        world_changes: Optional[Dict[str, bool]],
-        inventory_changes: Optional[Dict[str, bool]],
-        trigger_message_id: Optional[int],
+        world_changes: Optional[dict[str, bool]],
+        inventory_changes: Optional[dict[str, bool]],
+        trigger_message_id: Optional[int],  # pylint: disable=unused-argument
     ):
         # XXX: this should probably be version controlled and associated with a particular request id
 
@@ -245,7 +239,7 @@ class DatabaseConnection:
                         (user_id, item_id),
                     )
 
-    def load_world_state(self) -> Set[str]:
+    def load_world_state(self) -> set[str]:
         self.cursor.execute(
             """
             SELECT i.name
@@ -255,7 +249,7 @@ class DatabaseConnection:
         )
         return {row["name"] for row in self.cursor.fetchall()}
 
-    def load_player_inventory(self, user_id: int) -> Set[str]:
+    def load_player_inventory(self, user_id: int) -> set[str]:
         self.cursor.execute(
             """
             SELECT i.name
@@ -268,6 +262,7 @@ class DatabaseConnection:
         return {row["name"] for row in self.cursor.fetchall()}
 
 
+# pylint: disable=too-few-public-methods
 class Database:
     def __init__(self, db_path: str):
         self.db_path = db_path
@@ -307,7 +302,7 @@ class Database:
             except Exception as e:
                 if conn:
                     conn.rollback()
-                raise
+                raise e
             finally:
                 if conn:
                     conn.close()
@@ -321,12 +316,13 @@ class Database:
 
                 CREATE TABLE IF NOT EXISTS users (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    username TEXT,
-                    upstream_id INTEGER UNIQUE NOT NULL,
+                    username TEXT NOT NULL,
+                    frontend TEXT,
+                    upstream_id TEXT NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
-                CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
-                CREATE INDEX IF NOT EXISTS idx_users_upstream_id ON users(upstream_id);
+
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_users_upstream_id ON users(frontend, upstream_id);
 
                 INSERT OR IGNORE INTO users (id, username, upstream_id) VALUES (0, 'System', 0);
 
@@ -354,7 +350,8 @@ class Database:
 
                 CREATE TABLE IF NOT EXISTS messages (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    upstream_id INTEGER,
+                    frontend TEXT NOT NULL,
+                    upstream_id TEXT,
                     sender_id INTEGER NOT NULL,
                     content TEXT NOT NULL,
                     reply_to_id INTEGER,
@@ -363,7 +360,7 @@ class Database:
                     FOREIGN KEY (sender_id) REFERENCES users(id),
                     FOREIGN KEY (reply_to_id) REFERENCES messages(id)
                 );
-                CREATE INDEX IF NOT EXISTS idx_messages_upstream_id ON messages(upstream_id);
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_upstream_id ON messages(frontend, upstream_id);
 
                 CREATE TABLE IF NOT EXISTS reactions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,

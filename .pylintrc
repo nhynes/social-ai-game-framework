@@ -1,0 +1,13 @@
+[master]
+disable=
+    missing-module-docstring,
+    missing-class-docstring,
+    missing-function-docstring,
+    broad-exception-caught,
+    too-many-instance-attributes,
+    too-many-arguments,
+    too-many-positional-arguments,
+    fixme,
+
+[format]
+max-line-length=120

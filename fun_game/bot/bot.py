@@ -14,7 +14,7 @@ logger = logging.getLogger("bot")
 
 
 class Bot(commands.Bot):
-    def __init__(self):
+    def __init__(self) -> None:
         intents = discord.Intents.default()
         intents.message_content = True
         intents.messages = True
@@ -45,7 +45,7 @@ class Bot(commands.Bot):
         await self.tree.sync()
 
     async def on_ready(self):
-        logger.info(f"Bot connected as {self.user}")
+        logger.info("Bot connected as %s", self.user)
         for guild in self.guilds:
             await self.on_guild_join(guild)
 
@@ -61,10 +61,11 @@ class Bot(commands.Bot):
                 print("no fun-game channel")
                 try:
                     channel = await guild.create_text_channel("fun-game")
-                    logger.info(f"Created channel #fun-game in {guild.name}")
+                    logger.info("Created channel #fun-game in %s", guild.name)
                 except discord.Forbidden:
                     logger.error(
-                        f"Bot doesn't have permission to create channels in {guild.name}"
+                        "Bot doesn't have permission to create channels in %s",
+                        guild.name,
                     )
                     return
 
@@ -72,4 +73,4 @@ class Bot(commands.Bot):
             return
         guild_state.game_channel = channel
         self.guild_states[guild.id] = guild_state
-        logger.info(f"Initialized guild state for {guild.name} (ID: {guild.id})")
+        logger.info("Initialized guild state for %s (ID: %s)", guild.name, guild.id)

@@ -1,12 +1,12 @@
 from enum import Enum
-from typing import Iterable, List
+from typing import Iterable
 
 from discord import app_commands
 from discord.ext import commands
 import discord
 
-from bot import Bot, GuildState
-from game import Frontend
+from ..bot import Bot, GuildState
+from ...game import Frontend
 
 
 class Options(Enum):
@@ -16,7 +16,7 @@ class Options(Enum):
 
 
 class ShowCommands(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: Bot):
         self.bot: Bot = bot
 
     @app_commands.command()
@@ -58,11 +58,12 @@ def _get_world_state_items(guild_state: GuildState) -> Iterable[str]:
 def _get_inventory_items(
     guild_state: GuildState, upstream_user_id: int
 ) -> Iterable[str]:
-    return guild_state.game_engine.player_inventory(Frontend.discord, upstream_user_id)
+    return guild_state.game_engine.player_inventory(Frontend.DISCORD, upstream_user_id)
 
 
-def _paginate(items: Iterable[str], max_chars=4000) -> List[str]:
-    pages, current_page = [], []
+def _paginate(items: Iterable[str], max_chars=4000) -> list[str]:
+    pages: list[str] = []
+    current_page: list[str] = []
     current_length = 0
 
     for item in items:
