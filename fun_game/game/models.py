@@ -63,7 +63,7 @@ class GameResponse:
     response_text: str
 
     _message_id: int
-    _engine: GameEngine  # pylint: disable=used-before-assignment
+    _engine: "GameEngine"
 
     def mark_responded(self, upstream_reply_id: int):
         self._engine.mark_message_processed(self._message_id, upstream_reply_id)

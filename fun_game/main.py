@@ -5,7 +5,7 @@ import logging
 from dotenv import load_dotenv
 import discord
 
-from .bot import Bot
+from fun_game.bot import Bot
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)

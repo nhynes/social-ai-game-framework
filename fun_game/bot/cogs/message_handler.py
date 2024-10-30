@@ -6,8 +6,8 @@ from typing import Iterable
 import discord
 from discord.ext import commands
 
-from ...game import GameContext, Frontend
-from ..bot import Bot, GuildState
+from fun_game.game import GameContext, Frontend
+from fun_game.bot import Bot, GuildState
 
 logger = logging.getLogger("bot.cogs.message_handler")
 logger.setLevel(logging.DEBUG)

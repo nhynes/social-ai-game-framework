@@ -5,8 +5,8 @@ from discord import app_commands
 from discord.ext import commands
 import discord
 
-from ..bot import Bot, GuildState
-from ...game import Frontend
+from fun_game.bot import Bot, GuildState
+from fun_game.game import Frontend
 
 
 class Options(Enum):
