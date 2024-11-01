@@ -30,17 +30,16 @@ class ShowCommands(commands.Cog):
             return
 
         if option == Options.rules:
-            await interaction.response.send_message(
-                "This feature is not yet implemented, but will eventually show public game rules",
-                ephemeral=True,
-            )
-            return
+            items = [
+                rule[1].rule
+                for rule in guild_state.game_engine.custom_rules
+                if not rule[1].secret
+            ]
+        elif option == Options.inventory:
+            items = guild_state.game_engine.player_inventory(interaction.user.id)
+        else:
+            items = guild_state.game_engine.world_state
 
-        items = (
-            _get_inventory_items(guild_state, interaction.user.id)
-            if option == Options.inventory
-            else _get_world_state_items(guild_state)
-        )
         if not items:
             await interaction.response.send_message(
                 f"{"Your" if option == Options.inventory else "The"} {option.value} is empty.",
@@ -50,14 +49,6 @@ class ShowCommands(commands.Cog):
         replies = paginate(items)
         for reply in replies:
             await interaction.response.send_message(reply, ephemeral=True)
-
-
-def _get_world_state_items(guild_state: GuildState) -> Iterable[str]:
-    return guild_state.game_engine.world_state
-
-
-def _get_inventory_items(guild_state: GuildState, user_id: int) -> Iterable[str]:
-    return guild_state.game_engine.player_inventory(user_id)
 
 
 async def setup(bot):

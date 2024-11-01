@@ -124,9 +124,10 @@ class DatabaseConnection:
         self.cursor.execute("SELECT id, rule FROM custom_rules WHERE removed = 0")
         return dict((row["id"], row["rule"]) for row in self.cursor.fetchall())
 
-    def add_custom_rule(self, rule: str, creator_id: int) -> int:
+    def add_custom_rule(self, rule: str, creator_id: int, secret: bool = False) -> int:
         self.cursor.execute(
-            "INSERT INTO custom_rules (rule, creator) VALUES (?, ?)", (rule, creator_id)
+            "INSERT INTO custom_rules (rule, creator, secret) VALUES (?, ?, ?)",
+            (rule, creator_id, secret),
         )
         return self.cursor.fetchone()["id"]
 
@@ -380,6 +381,7 @@ class Database:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     rule TEXT NOT NULL,
                     creator INTEGER NOT NULL,
+                    secret INTEGER NOT NULL DEFAULT 0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     removed INTEGER NOT NULL DEFAULT 0,
                     FOREIGN KEY (creator) REFERENCES users(id)
