@@ -4,7 +4,7 @@ from typing import AsyncContextManager, Callable, Iterable, Optional
 from fun_game.config import GameConfig
 from .database import Database, DatabaseConnection, SimpleMessage
 from .ai import AIProvider
-from .models import Frontend, GameContext, GameResponse
+from .models import GameContext, GameResponse
 from .prompts import (
     FilterModelResponse,
     GameModelResponse,
@@ -18,21 +18,16 @@ logger.setLevel(logging.DEBUG)
 
 class GameEngine:
     @classmethod
-    def make_factory(
-        cls, config: GameConfig, frontend: Frontend
-    ) -> Callable[[int], "GameEngine"]:
-        def _factory(instance_id: int) -> "GameEngine":
-            return cls(config, frontend, instance_id)
+    def make_factory(cls, config: GameConfig) -> Callable[[str], "GameEngine"]:
+        def _factory(instance_id: str) -> "GameEngine":
+            return cls(config, instance_id)
 
         return _factory
 
-    def __init__(
-        self, config: GameConfig, frontend: Frontend, frontend_instance_id: int
-    ):
+    def __init__(self, config: GameConfig, instance_id: str):
         self._config = config
-        self._frontend = frontend
         self._ai = AIProvider.default()
-        self._db = Database(f"data/{frontend.value}_{frontend_instance_id}.sqlite")
+        self._db = Database(f"data/{instance_id}.sqlite")
         self._world_state: set[str] = set()
         self._custom_rules: dict[int, str] = {}
         self._player_inventories: dict[int, set[str]] = {}
@@ -68,18 +63,14 @@ class GameEngine:
 
     async def _do_process_message(self, context: GameContext) -> Optional[GameResponse]:
         with self._db.connect() as db:
-            user = db.get_or_create_user(
-                self._frontend, context.user_id, context.user_name
-            )
+            user = db.get_or_create_user(context.user_id, context.user_name)
             user_id = user.id
             user_name = user.name
-            message = db.get_message(self._frontend, context.message_id)
+            message = db.get_message(context.message_id)
 
             reply_to_message_id: Optional[int] = None
             if context.reply_to_message_id:
-                reply_to_message = db.get_message(
-                    self._frontend, context.reply_to_message_id
-                )
+                reply_to_message = db.get_message(context.reply_to_message_id)
                 if reply_to_message:
                     reply_to_message_id = reply_to_message.id
 
@@ -91,7 +82,6 @@ class GameEngine:
                 message_id = db.add_message(
                     context.message_content,
                     sender_id=user_id,
-                    frontend=self._frontend,
                     upstream_id=context.message_id,
                     reply_to_id=reply_to_message_id,
                 )
@@ -120,7 +110,6 @@ class GameEngine:
             reply_id = db.add_message(
                 game_response.response,
                 sender_id=0,
-                frontend=self._frontend,
                 upstream_id=None,
                 reply_to_id=message_id,
             )
@@ -168,7 +157,7 @@ class GameEngine:
 
     def add_custom_rule(self, rule: str, creator_id: int) -> Optional[int]:
         with self._db.connect() as db:
-            user = db.get_user(self._frontend, creator_id)
+            user = db.get_user(creator_id)
             if not user:
                 return None
             rule_id = db.add_custom_rule(rule, user.id)
@@ -188,8 +177,8 @@ class GameEngine:
         reaction: str,
     ):
         with self._db.connect() as db:
-            message = db.get_message(self._frontend, upstream_message_id)
-            user = db.get_or_create_user(self._frontend, upstream_user_id, user_name)
+            message = db.get_message(upstream_message_id)
+            user = db.get_or_create_user(upstream_user_id, user_name)
             if not message or not user:
                 return
             logger.info("%s added reaction %s to message", user_name, reaction)
@@ -203,8 +192,8 @@ class GameEngine:
         reaction: str,
     ):
         with self._db.connect() as db:
-            message = db.get_message(self._frontend, upstream_message_id)
-            user = db.get_or_create_user(self._frontend, upstream_user_id, user_name)
+            message = db.get_message(upstream_message_id)
+            user = db.get_or_create_user(upstream_user_id, user_name)
             if not message or not user:
                 return
             logger.info("%s removed reaction %s from message", user_name, reaction)
@@ -212,7 +201,7 @@ class GameEngine:
 
     def player_inventory(self, user_id: int) -> Iterable[str]:
         with self._db.connect() as db:
-            user = db.get_user(self._frontend, user_id)
+            user = db.get_user(user_id)
             if not user:
                 return []
             return self._load_player_inventory(user.id, db)

@@ -8,7 +8,7 @@ import discord
 
 from fun_game.config import Config
 from fun_game.frontends import Discord
-from fun_game.game import Frontend, GameEngine
+from fun_game.game import GameEngine
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -24,9 +24,7 @@ async def main():
     print(config)
 
     if config.frontend == "discord":
-        async with Discord(
-            engine_factory=GameEngine.make_factory(config.game, Frontend.DISCORD)
-        ) as bot:
+        async with Discord(engine_factory=GameEngine.make_factory(config.game)) as bot:
             try:
                 await bot.start(os.environ["DISCORD_TOKEN"])
             except discord.LoginFailure:

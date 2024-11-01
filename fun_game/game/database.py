@@ -3,7 +3,7 @@ from contextlib import contextmanager
 from typing import Generator, Optional
 import time
 
-from .models import Frontend, Message, MessageStatus, SimpleMessage, User
+from .models import Message, MessageStatus, SimpleMessage, User
 
 
 class DatabaseConnection:
@@ -11,35 +11,30 @@ class DatabaseConnection:
         self.conn = conn
         self.cursor = conn.cursor()
 
-    def get_or_create_user(
-        self, frontend: Frontend, upstream_id: int, display_name: str
-    ) -> User:
+    def get_or_create_user(self, upstream_id: int, display_name: str) -> User:
         self.cursor.execute(
             """
             INSERT INTO users (username, upstream_id)
             VALUES (?, ?, ?)
-            ON CONFLICT(frontend, upstream_id)
+            ON CONFLICT(upstream_id)
             DO UPDATE SET username = excluded.username
             RETURNING id
             """,
-            (display_name, frontend, upstream_id),
+            (display_name, upstream_id),
         )
         user_id = self.cursor.fetchone()["id"]
-        return User(
-            id=user_id, frontend=frontend, upstream_id=upstream_id, name=display_name
-        )
+        return User(id=user_id, upstream_id=upstream_id, name=display_name)
 
-    def get_user(self, frontend: Frontend, upstream_id: int) -> Optional[User]:
+    def get_user(self, upstream_id: int) -> Optional[User]:
         self.cursor.execute(
-            "SELECT * FROM users WHERE frontend = ? AND upstream_id = ?",
-            (frontend, upstream_id),
+            "SELECT * FROM users WHERE upstream_id = ?",
+            (upstream_id,),
         )
         row = self.cursor.fetchone()
         if not row:
             return None
         return User(
             id=row["id"],
-            frontend=frontend,
             upstream_id=upstream_id,
             name=row["username"],
         )
@@ -156,18 +151,16 @@ class DatabaseConnection:
         self,
         content: str,
         sender_id: int,
-        frontend: Frontend,
         upstream_id: Optional[int] = None,
         reply_to_id: Optional[int] = None,
         filtered: Optional[bool] = False,
     ) -> int:
         self.cursor.execute(
-            """INSERT INTO messages (content, sender_id, frontend, upstream_id, reply_to_id, status)
+            """INSERT INTO messages (content, sender_id, upstream_id, reply_to_id, status)
                VALUES (?, ?, ?, ?, ?)""",
             (
                 content,
                 sender_id,
-                frontend,
                 upstream_id,
                 reply_to_id,
                 MessageStatus.FILTERED.value if filtered else None,
@@ -197,17 +190,16 @@ class DatabaseConnection:
             (message_id,),
         )
 
-    def get_message(self, frontend: Frontend, upstream_id: int) -> Optional[Message]:
+    def get_message(self, upstream_id: int) -> Optional[Message]:
         self.cursor.execute(
-            "SELECT * FROM messages WHERE frontend = ? AND upstream_id = ?",
-            (frontend, upstream_id),
+            "SELECT * FROM messages WHERE upstream_id = ?",
+            (upstream_id,),
         )
         row = self.cursor.fetchone()
         if not row:
             return None
         return Message(
             id=row["id"],
-            frontend=frontend,
             upstream_id=upstream_id,
             sender_id=row["sender_id"],
             content=row["content"],
@@ -332,12 +324,11 @@ class Database:
                 CREATE TABLE IF NOT EXISTS users (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     username TEXT NOT NULL,
-                    frontend TEXT,
                     upstream_id TEXT NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
 
-                CREATE UNIQUE INDEX IF NOT EXISTS idx_users_upstream_id ON users(frontend, upstream_id);
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_users_upstream_id ON users(upstream_id);
 
                 INSERT OR IGNORE INTO users (id, username, upstream_id) VALUES (0, 'System', 0);
 
@@ -365,7 +356,6 @@ class Database:
 
                 CREATE TABLE IF NOT EXISTS messages (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    frontend TEXT NOT NULL,
                     upstream_id TEXT,
                     sender_id INTEGER NOT NULL,
                     content TEXT NOT NULL,
@@ -375,7 +365,7 @@ class Database:
                     FOREIGN KEY (sender_id) REFERENCES users(id),
                     FOREIGN KEY (reply_to_id) REFERENCES messages(id)
                 );
-                CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_upstream_id ON messages(frontend, upstream_id);
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_upstream_id ON messages(upstream_id);
 
                 CREATE TABLE IF NOT EXISTS reactions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,

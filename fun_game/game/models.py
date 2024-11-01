@@ -14,10 +14,6 @@ class SimpleMessage:
     content: str
 
 
-class Frontend(Enum):
-    DISCORD = "discord"
-
-
 class MessageStatus(Enum):
     FILTERED = "filtered"
     UNFILTERED = "unfiltered"
@@ -28,7 +24,6 @@ class MessageStatus(Enum):
 @dataclass
 class Message:
     id: int
-    frontend: Frontend
     upstream_id: Optional[int]
     sender_id: int
     content: str
@@ -39,7 +34,6 @@ class Message:
 
 @dataclass
 class User:
-    frontend: Frontend
     id: int
     upstream_id: int
     name: str

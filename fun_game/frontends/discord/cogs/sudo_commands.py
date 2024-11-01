@@ -8,7 +8,7 @@ from .utils import paginate
 
 
 class SudoCommands(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: Bot):
         self.bot: Bot = bot
 
     sudo_group = app_commands.Group(name="sudo", description="Admin commands")

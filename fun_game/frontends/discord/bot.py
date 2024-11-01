@@ -17,7 +17,7 @@ logger = logging.getLogger("bot")
 
 
 class Bot(commands.Bot):
-    def __init__(self, engine_factory: Callable[[int], GameEngine]) -> None:
+    def __init__(self, engine_factory: Callable[[str], GameEngine]) -> None:
         intents = discord.Intents.default()
         intents.message_content = True
         intents.messages = True
@@ -54,7 +54,9 @@ class Bot(commands.Bot):
             await self.on_guild_join(guild)
 
     async def on_guild_join(self, guild):
-        guild_state = GuildState(guild.id, game_engine=self._engine_factory(guild.id))
+        guild_state = GuildState(
+            guild.id, game_engine=self._engine_factory(f"discord_guild_{guild.id}")
+        )
 
         # Look for existing channel
         channel = discord.utils.get(guild.channels, id=1300287188365475940)

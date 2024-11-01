@@ -4,7 +4,7 @@ import logging
 from discord.ext import commands
 import discord
 
-from fun_game.game import Frontend, GameContext
+from fun_game.game import GameContext
 from fun_game.frontends.discord import Bot, GuildState
 
 from .message_handler import do_handle_message
