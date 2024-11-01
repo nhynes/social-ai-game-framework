@@ -15,7 +15,6 @@ class SimpleMessage:
 
 
 class Frontend(Enum):
-    NONE = "none"
     DISCORD = "discord"
 
 
@@ -48,7 +47,6 @@ class User:
 
 @dataclass
 class GameContext:
-    frontend: Frontend
     user_id: int
     user_name: str
     message_content: str

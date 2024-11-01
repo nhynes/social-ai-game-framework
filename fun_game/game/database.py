@@ -125,6 +125,21 @@ class DatabaseConnection:
 
         return messages
 
+    def load_custom_rules(self) -> dict[int, str]:
+        self.cursor.execute("SELECT id, rule FROM custom_rules WHERE removed = 0")
+        return dict((row["id"], row["rule"]) for row in self.cursor.fetchall())
+
+    def add_custom_rule(self, rule: str, creator_id: int) -> int:
+        self.cursor.execute(
+            "INSERT INTO custom_rules (rule, creator) VALUES (?, ?)", (rule, creator_id)
+        )
+        return self.cursor.fetchone()["id"]
+
+    def remove_custom_rule(self, rule_id: int):
+        self.cursor.execute(
+            "UPDATE custom_rules SET removed = 0 WHERE id = ?", (rule_id,)
+        )
+
     def add_reaction(self, message_id: int, user_id: Optional[int], reaction: str):
         self.cursor.execute(
             "INSERT INTO reactions (message_id, user_id, reaction) VALUES (?, ?, ?)",
@@ -370,5 +385,15 @@ class Database:
                     FOREIGN KEY (message_id) REFERENCES messages(id),
                     FOREIGN KEY (user_id) REFERENCES users(id)
                 );
+
+                CREATE TABLE IF NOT EXISTS custom_rules (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    rule TEXT NOT NULL,
+                    creator INTEGER NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    removed INTEGER NOT NULL DEFAULT 0,
+                    FOREIGN KEY (creator) REFERENCES users(id)
+                )
+                CREATE INDEX idx_custom_rules_active ON custom_rules (removed) WHERE removed = 0;
                 """
             )

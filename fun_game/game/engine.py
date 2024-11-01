@@ -2,7 +2,7 @@ import logging
 from typing import AsyncContextManager, Callable, Iterable, Optional
 
 from fun_game.config import GameConfig
-from .database import Database, SimpleMessage
+from .database import Database, DatabaseConnection, SimpleMessage
 from .ai import AIProvider
 from .models import Frontend, GameContext, GameResponse
 from .prompts import (
@@ -29,19 +29,25 @@ class GameEngine:
     def __init__(
         self, config: GameConfig, frontend: Frontend, frontend_instance_id: int
     ):
-        assert frontend == Frontend.DISCORD
         self._config = config
+        self._frontend = frontend
         self._ai = AIProvider.default()
         self._db = Database(f"data/{frontend.value}_{frontend_instance_id}.sqlite")
         self._world_state: set[str] = set()
+        self._custom_rules: dict[int, str] = {}
         self._player_inventories: dict[int, set[str]] = {}
 
         with self._db.connect() as db:
             self._world_state = db.load_world_state()
+            self._custom_rules = db.load_custom_rules()
 
     @property
     def world_state(self) -> Iterable[str]:
         return list(self._world_state)
+
+    @property
+    def custom_rules(self) -> Iterable[tuple[int, str]]:
+        return list(self._custom_rules.items())
 
     async def process_message(
         self,
@@ -62,43 +68,37 @@ class GameEngine:
 
     async def _do_process_message(self, context: GameContext) -> Optional[GameResponse]:
         with self._db.connect() as db:
-            if context.frontend != Frontend.NONE:
-                user = db.get_or_create_user(
-                    context.frontend, context.user_id, context.user_name
+            user = db.get_or_create_user(
+                self._frontend, context.user_id, context.user_name
+            )
+            user_id = user.id
+            user_name = user.name
+            message = db.get_message(self._frontend, context.message_id)
+
+            reply_to_message_id: Optional[int] = None
+            if context.reply_to_message_id:
+                reply_to_message = db.get_message(
+                    self._frontend, context.reply_to_message_id
                 )
-                user_id = user.id
-                user_name = user.name
-                message = db.get_message(context.frontend, context.message_id)
+                if reply_to_message:
+                    reply_to_message_id = reply_to_message.id
 
-                reply_to_message_id: Optional[int] = None
-                if context.reply_to_message_id:
-                    reply_to_message = db.get_message(
-                        context.frontend, context.reply_to_message_id
-                    )
-                    if reply_to_message:
-                        reply_to_message_id = reply_to_message.id
-
-                if message:
-                    message_id = message.id
-                    if message.status == "filtered" and context.force_feed:
-                        db.unfilter_message(message_id)
-                else:
-                    message_id = db.add_message(
-                        context.message_content,
-                        sender_id=user_id,
-                        frontend=context.frontend,
-                        upstream_id=context.message_id,
-                        reply_to_id=reply_to_message_id,
-                    )
+            if message:
+                message_id = message.id
+                if message.status == "filtered" and context.force_feed:
+                    db.unfilter_message(message_id)
             else:
-                user_id = context.user_id
-                user_name = context.user_name
-                message_id = context.message_id
-                reply_to_message_id = context.reply_to_message_id
+                message_id = db.add_message(
+                    context.message_content,
+                    sender_id=user_id,
+                    frontend=self._frontend,
+                    upstream_id=context.message_id,
+                    reply_to_id=reply_to_message_id,
+                )
 
             message_context = db.get_message_context(context.reply_to_message_id)
 
-            player_inventory = self._load_player_inventory(user_id)
+            player_inventory = self._load_player_inventory(user_id, db)
 
             logger.debug("generating response")
             game_response = await self.process_game_action(
@@ -120,7 +120,7 @@ class GameEngine:
             reply_id = db.add_message(
                 game_response.response,
                 sender_id=0,
-                frontend=context.frontend,
+                frontend=self._frontend,
                 upstream_id=None,
                 reply_to_id=message_id,
             )
@@ -153,70 +153,76 @@ class GameEngine:
         player_inventory: Iterable[str],
         player_name: str,
         message_context: Iterable[SimpleMessage],
-        sudo: Optional[bool] = False,
+        sudo: bool = False,
     ) -> GameModelResponse:
         system_prompt = make_game_system_prompt(
-            self._config.engine,
-            world_state,
-            player_name,
-            player_inventory,
-            message_context,
+            config=self._config.engine,
+            world_state=world_state,
+            player_name=player_name,
+            player_inventory=player_inventory,
+            context=message_context,
+            additional_rules=self._custom_rules.values(),
             sudo=sudo,
         )
         return await self._ai.prompt(message, system_prompt, GameModelResponse)
 
-    def add_reaction(
+    def add_custom_rule(self, rule: str, creator_id: int) -> Optional[int]:
+        with self._db.connect() as db:
+            user = db.get_user(self._frontend, creator_id)
+            if not user:
+                return None
+            rule_id = db.add_custom_rule(rule, user.id)
+        self._custom_rules[rule_id] = rule
+        return rule_id
+
+    def remove_custom_rule(self, rule_id: int):
+        with self._db.connect() as db:
+            db.remove_custom_rule(rule_id)
+        del self._custom_rules[rule_id]
+
+    def record_response_reaction(
         self,
-        frontend: Frontend,
-        message_id: int,
-        user_id: int,
+        upstream_message_id: int,
+        upstream_user_id: int,
         user_name: str,
         reaction: str,
     ):
         with self._db.connect() as db:
-            if frontend != Frontend.NONE:
-                message = db.get_message(frontend, message_id)
-                user = db.get_or_create_user(frontend, user_id, user_name)
-                if not message or not user:
-                    return
-                message_id = message.id
-                user_id = user.id
+            message = db.get_message(self._frontend, upstream_message_id)
+            user = db.get_or_create_user(self._frontend, upstream_user_id, user_name)
+            if not message or not user:
+                return
             logger.info("%s added reaction %s to message", user_name, reaction)
-            db.add_reaction(message_id, user_id, reaction)
+            db.add_reaction(message.id, user.id, reaction)
 
-    def remove_reaction(
+    def unrecord_response_reaction(
         self,
-        frontend: Frontend,
-        message_id: int,
-        user_id: int,
+        upstream_message_id: int,
+        upstream_user_id: int,
         user_name: str,
         reaction: str,
     ):
         with self._db.connect() as db:
-            if frontend != Frontend.NONE:
-                message = db.get_message(frontend, message_id)
-                user = db.get_or_create_user(frontend, user_id, user_name)
-                if not message or not user:
-                    return
-                message_id = message.id
-                user_id = user.id
+            message = db.get_message(self._frontend, upstream_message_id)
+            user = db.get_or_create_user(self._frontend, upstream_user_id, user_name)
+            if not message or not user:
+                return
             logger.info("%s removed reaction %s from message", user_name, reaction)
-            db.remove_reaction(message_id, user_id, reaction)
+            db.remove_reaction(message.id, user.id, reaction)
 
-    def player_inventory(self, frontend: Frontend, user_id: int) -> Iterable[str]:
-        if frontend != Frontend.NONE:
-            with self._db.connect() as db:
-                user = db.get_user(frontend, user_id)
+    def player_inventory(self, user_id: int) -> Iterable[str]:
+        with self._db.connect() as db:
+            user = db.get_user(self._frontend, user_id)
             if not user:
                 return []
-            user_id = user.id
-        return self._load_player_inventory(user_id)
+            return self._load_player_inventory(user.id, db)
 
-    def _load_player_inventory(self, user_id: int) -> Iterable[str]:
+    def _load_player_inventory(
+        self, user_id: int, db: DatabaseConnection
+    ) -> Iterable[str]:
         player_inventory = self._player_inventories.get(user_id)
         if player_inventory is None:
-            with self._db.connect() as db:
-                self._player_inventories[user_id] = db.load_player_inventory(user_id)
+            self._player_inventories[user_id] = db.load_player_inventory(user_id)
         return self._player_inventories[user_id]
 
     def _update_cached_state(self, game_response, user_id):

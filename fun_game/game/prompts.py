@@ -54,9 +54,7 @@ class FilterModelResponse(BaseModel):
 
 
 # pylint: disable=line-too-long
-_GAME_SYSTEM_PROMPT = """You are a multiplayer simulation game engine that processes commands to advance game state in a realistic manner according to the world properties, core mechanics, and interaction rules.
-
-Core principles:
+_GAME_SYSTEM_PROMPT = """You are a multiplayer simulation game engine that processes commands to advance game state in a manner consistent with the world properties, core mechanics, and interaction rules.
 
 WORLD PROPERTIES:
 {world_properties}
@@ -74,8 +72,11 @@ INTERACTION RULES:
 PLAYER RESPONSES:
 {response_guidelines}
 
+ADDITIONAL RULES:
+{custom_rules}
+
 RESPONSE FORMAT:
-Respond in JSON according to the following schema
+Respond in JSON according to the following schema WITHOUT a code fence or anything else.
 ```
 // A patch set.
 // The key is the contents of an item to add or remove.
@@ -96,31 +97,6 @@ type ModelResponse = {
     player_inventory_updates: Changes | null;
 };
 ```
-Here's an example:
-If the input is
-```
----
-Inventory:
-chocolate bar in wrapper
-knife
----
-
-I open the chocolate bar, cut it in half, and eat one half. A rainbow forms.
-```
-The response would be like
-```json
-{
-    "success": "true",
-    "response": "...",
-    "world_state_updates": {
-        "A rainbow has formed above the player": true
-    },
-    "player_inventory_updates": {
-        "chocolate bar in wrapper": false,
-        "chocolate bar half": true
-    },
-}
-```
 """
 
 
@@ -130,7 +106,8 @@ def make_game_system_prompt(
     player_name: str,
     player_inventory: Iterable[str],
     context: Iterable[SimpleMessage],
-    sudo: Optional[bool] = False,
+    additional_rules: Optional[Iterable[str]] = None,
+    sudo: bool = False,
 ) -> str:
     components = [
         _GAME_SYSTEM_PROMPT.format(
@@ -140,6 +117,10 @@ def make_game_system_prompt(
             interaction_donts=_format_list(
                 f"DO NOT {s[0].lower()}{s[1:]}" for s in config.interaction_rules.dont
             ),
+            additional_rules=(
+                _format_list(additional_rules) if additional_rules else None
+            )
+            or "None yet.",
             response_guidelines=_format_list(config.response_guidelines),
         )
     ]

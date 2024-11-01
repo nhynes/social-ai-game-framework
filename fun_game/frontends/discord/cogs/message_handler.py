@@ -62,7 +62,6 @@ class MessageHandler(commands.Cog):
             "received message from %s: %s", message.author.display_name, message.content
         )
         context = GameContext(
-            frontend=Frontend.DISCORD,
             user_id=message.author.id,
             user_name=message.author.display_name,
             message_content=message.content,

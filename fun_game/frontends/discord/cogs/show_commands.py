@@ -5,9 +5,9 @@ from discord import app_commands
 from discord.ext import commands
 import discord
 
-from fun_game.game import Frontend
-
 from fun_game.frontends.discord import Bot, GuildState
+
+from .utils import paginate
 
 
 class Options(Enum):
@@ -47,7 +47,7 @@ class ShowCommands(commands.Cog):
                 ephemeral=True,
             )
             return
-        replies = _paginate(items)
+        replies = paginate(items)
         for reply in replies:
             await interaction.response.send_message(reply, ephemeral=True)
 
@@ -56,31 +56,8 @@ def _get_world_state_items(guild_state: GuildState) -> Iterable[str]:
     return guild_state.game_engine.world_state
 
 
-def _get_inventory_items(
-    guild_state: GuildState, upstream_user_id: int
-) -> Iterable[str]:
-    return guild_state.game_engine.player_inventory(Frontend.DISCORD, upstream_user_id)
-
-
-def _paginate(items: Iterable[str], max_chars=4000) -> list[str]:
-    pages: list[str] = []
-    current_page: list[str] = []
-    current_length = 0
-
-    for item in items:
-        formatted_item = f"- {item}\n"
-        if current_length + len(formatted_item) > max_chars:
-            pages.append("".join(current_page))
-            current_page = [formatted_item]
-            current_length = len(formatted_item)
-        else:
-            current_page.append(formatted_item)
-            current_length += len(formatted_item)
-
-    if current_page:
-        pages.append("".join(current_page))
-
-    return pages
+def _get_inventory_items(guild_state: GuildState, user_id: int) -> Iterable[str]:
+    return guild_state.game_engine.player_inventory(user_id)
 
 
 async def setup(bot):

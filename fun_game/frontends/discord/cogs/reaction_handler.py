@@ -53,7 +53,6 @@ class ReactionHandler(commands.Cog):
             message = await channel.fetch_message(payload.message_id)
 
             context = GameContext(
-                frontend=Frontend.DISCORD,
                 user_id=payload.message_id,
                 user_name=message.author.display_name,
                 message_content=message.content,
@@ -68,8 +67,7 @@ class ReactionHandler(commands.Cog):
             return
 
         user = await self.bot.fetch_user(payload.user_id)
-        guild_state.game_engine.add_reaction(
-            Frontend.DISCORD,
+        guild_state.game_engine.record_response_reaction(
             payload.message_id,
             user.id,
             user.display_name,
@@ -84,8 +82,7 @@ class ReactionHandler(commands.Cog):
         guild_state: GuildState,
     ):
         user = await self.bot.fetch_user(payload.user_id)
-        guild_state.game_engine.remove_reaction(
-            Frontend.DISCORD,
+        guild_state.game_engine.unrecord_response_reaction(
             payload.message_id,
             user.id,
             user.display_name,
