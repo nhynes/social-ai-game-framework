@@ -1,3 +1,4 @@
+import argparse
 import os
 import asyncio
 import logging
@@ -5,7 +6,9 @@ import logging
 from dotenv import load_dotenv
 import discord
 
-from fun_game.bot import Bot
+from fun_game.config import Config
+from fun_game.frontends import Discord
+from fun_game.game import Frontend, GameEngine
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -13,13 +16,25 @@ logger = logging.getLogger("main")
 
 
 async def main():
-    async with Bot() as bot:
-        try:
-            await bot.start(os.environ["DISCORD_TOKEN"])
-        except discord.LoginFailure:
-            logger.error("Invalid token")
-        except Exception as e:
-            logger.error("Error running bot: %s", e)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", type=str, help="Path to config file", required=True)
+    args = parser.parse_args()
+
+    config = Config.load(args.config)
+    print(config)
+
+    if config.frontend == "discord":
+        async with Discord(
+            engine_factory=GameEngine.make_factory(config.game, Frontend.DISCORD)
+        ) as bot:
+            try:
+                await bot.start(os.environ["DISCORD_TOKEN"])
+            except discord.LoginFailure:
+                logger.error("Invalid token")
+            except Exception as e:
+                logger.error("Error running bot: %s", e)
+    else:
+        raise TypeError("no frontend specified")
 
 
 if __name__ == "__main__":

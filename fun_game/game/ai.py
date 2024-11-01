@@ -1,66 +1,66 @@
-import os
-from typing import Iterable, Optional
 import logging
+import os
+from typing import Optional, Type, Union
 
 from anthropic import AsyncAnthropic
+import anthropic.types
 from openai import AsyncOpenAI
-
-from .prompts import (
-    FILTER_SYSTEM_PROMPT,
-    FilterModelResponse,
-    GameModelResponse,
-    SimpleMessage,
-    make_game_system_prompt,
-    parse_ai_response,
-)
+import openai.types.chat
+from pydantic import BaseModel
 
 logger = logging.getLogger("game.ai")
 logger.setLevel(logging.DEBUG)
 
 
 class AIProvider:
-    @staticmethod
-    def default() -> "AIProvider":
-        return AIProvider(
+    @classmethod
+    def default(cls):
+        return cls(
             AsyncAnthropic(api_key=os.environ["ANTHROPIC_API_KEY"]),
             AsyncOpenAI(api_key=os.environ["OPENAI_API_KEY"]),
         )
 
-    def __init__(self, anthropic: AsyncAnthropic, openai: AsyncOpenAI):
-        self.anthropic = anthropic
-        self.openai = openai
+    def __init__(self, anthropic_client: AsyncAnthropic, openai_client: AsyncOpenAI):
+        self.anthropic = anthropic_client
+        self.openai = openai_client
 
-    async def is_game_action(self, message: str) -> bool:
+    async def prompt_mini[
+        T: BaseModel
+    ](
+        self, user: str, system: str, model: Type[T], temperature: Optional[int] = 0
+    ) -> T:
         response = await self.openai.chat.completions.create(
             model="gpt-4o-mini",
-            max_tokens=512,
-            temperature=0,
+            max_tokens=1024,
+            temperature=temperature,
             messages=[
-                {"role": "system", "content": FILTER_SYSTEM_PROMPT},
-                {"role": "user", "content": message},
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
             ],
         )
-        filter_response = parse_ai_response(response, FilterModelResponse)
-        logger.debug("filter response: %s", filter_response)
-        return filter_response.forward and filter_response.confidence > 0.5
+        return parse_ai_response(response, model)
 
-    async def process_game_action(
-        self,
-        message: str,
-        world_state: Iterable[str],
-        player_inventory: Iterable[str],
-        player_name: str,
-        message_context: Iterable[SimpleMessage],
-        sudo: Optional[bool] = False,
-    ) -> GameModelResponse:
-        system_prompt = make_game_system_prompt(
-            world_state, player_name, player_inventory, message_context, sudo=sudo
-        )
-
+    async def prompt[T: BaseModel](self, user: str, system: str, model: Type[T]) -> T:
         response = await self.anthropic.messages.create(
             model="claude-3-5-sonnet-latest",
             max_tokens=8000,
-            system=system_prompt,
-            messages=[{"role": "user", "content": message}],
+            system=system,
+            messages=[{"role": "user", "content": user}],
         )
-        return parse_ai_response(response, GameModelResponse)
+        return parse_ai_response(response, model)
+
+
+def parse_ai_response[
+    T: BaseModel
+](
+    response: Union[anthropic.types.Message, openai.types.chat.ChatCompletion],
+    struct: Type[T],
+) -> T:
+    if isinstance(response, openai.types.chat.ChatCompletion):
+        response_message = response.choices[0].message.content or ""
+    else:
+        response_content = response.content[0]
+        assert isinstance(response_content, anthropic.types.TextBlock)
+        response_message = response_content.text
+
+    return struct.model_validate_json(response_message)

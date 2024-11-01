@@ -1,20 +1,38 @@
 import logging
 from typing import AsyncContextManager, Callable, Iterable, Optional
 
+from fun_game.config import GameConfig
+from .database import Database, SimpleMessage
 from .ai import AIProvider
 from .models import Frontend, GameContext, GameResponse
-from .database import Database
+from .prompts import (
+    FilterModelResponse,
+    GameModelResponse,
+    make_filter_system_prompt,
+    make_game_system_prompt,
+)
 
 logger = logging.getLogger("game.engine")
 logger.setLevel(logging.DEBUG)
 
 
 class GameEngine:
-    def __init__(self, frontend: Frontend, frontend_instance_id: int):
+    @classmethod
+    def make_factory(
+        cls, config: GameConfig, frontend: Frontend
+    ) -> Callable[[int], "GameEngine"]:
+        def _factory(instance_id: int) -> "GameEngine":
+            return cls(config, frontend, instance_id)
+
+        return _factory
+
+    def __init__(
+        self, config: GameConfig, frontend: Frontend, frontend_instance_id: int
+    ):
         assert frontend == Frontend.DISCORD
+        self._config = config
         self._ai = AIProvider.default()
-        db_prefix = "guild" if frontend == Frontend.DISCORD else frontend.value
-        self._db = Database(f"data/{db_prefix}_{frontend_instance_id}.db")
+        self._db = Database(f"data/{frontend.value}_{frontend_instance_id}.sqlite")
         self._world_state: set[str] = set()
         self._player_inventories: dict[int, set[str]] = {}
 
@@ -32,7 +50,7 @@ class GameEngine:
     ) -> Optional[GameResponse]:
         # Check if message is for the game
         if not context.force_feed:
-            if not await self._ai.is_game_action(context.message_content):
+            if not await self.is_game_action(context.message_content):
                 logger.debug("message has been filtered")
                 return None
 
@@ -83,7 +101,7 @@ class GameEngine:
             player_inventory = self._load_player_inventory(user_id)
 
             logger.debug("generating response")
-            game_response = await self._ai.process_game_action(
+            game_response = await self.process_game_action(
                 message=context.message_content,
                 world_state=self.world_state,
                 player_inventory=player_inventory,
@@ -115,6 +133,37 @@ class GameEngine:
             _engine=self,
             _message_id=reply_id,
         )
+
+    async def is_game_action(self, message: str) -> bool:
+        examples = self._config.filter.examples
+        filter_response = await self._ai.prompt_mini(
+            message,
+            make_filter_system_prompt(
+                positive_examples=examples.accept, negative_examples=examples.reject
+            ),
+            FilterModelResponse,
+        )
+        logger.debug("filter response: %s", filter_response)
+        return filter_response.forward and filter_response.confidence > 0.5
+
+    async def process_game_action(
+        self,
+        message: str,
+        world_state: Iterable[str],
+        player_inventory: Iterable[str],
+        player_name: str,
+        message_context: Iterable[SimpleMessage],
+        sudo: Optional[bool] = False,
+    ) -> GameModelResponse:
+        system_prompt = make_game_system_prompt(
+            self._config.engine,
+            world_state,
+            player_name,
+            player_inventory,
+            message_context,
+            sudo=sudo,
+        )
+        return await self._ai.prompt(message, system_prompt, GameModelResponse)
 
     def add_reaction(
         self,

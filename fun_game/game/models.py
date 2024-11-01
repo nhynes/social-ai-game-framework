@@ -15,8 +15,8 @@ class SimpleMessage:
 
 
 class Frontend(Enum):
-    NONE = 0
-    DISCORD = 1
+    NONE = "none"
+    DISCORD = "discord"
 
 
 class MessageStatus(Enum):

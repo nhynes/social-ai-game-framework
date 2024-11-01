@@ -4,8 +4,9 @@ import logging
 from discord.ext import commands
 import discord
 
-from fun_game.bot import Bot, GuildState
 from fun_game.game import Frontend, GameContext
+from fun_game.frontends.discord import Bot, GuildState
+
 from .message_handler import do_handle_message
 
 logger = logging.getLogger("bot.cogs.reaction_handler")
