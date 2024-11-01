@@ -4,7 +4,7 @@ from typing import AsyncContextManager, Callable, Iterable, Optional
 from fun_game.config import GameConfig
 from .database import Database, DatabaseConnection, SimpleMessage
 from .ai import AIProvider
-from .models import GameContext, GameResponse
+from .models import CustomRule, GameContext, GameResponse
 from .prompts import (
     FilterModelResponse,
     GameModelResponse,
@@ -29,19 +29,19 @@ class GameEngine:
         self._ai = AIProvider.default()
         self._db = Database(f"data/{instance_id}.sqlite")
         self._world_state: set[str] = set()
-        self._custom_rules: dict[int, str] = {}
+        self._custom_rules: dict[int, CustomRule] = {}
         self._player_inventories: dict[int, set[str]] = {}
 
         with self._db.connect() as db:
             self._world_state = db.load_world_state()
-            self._custom_rules = db.load_custom_rules()
+            self._custom_rules = {rule.id: rule for rule in db.load_custom_rules()}
 
     @property
     def world_state(self) -> Iterable[str]:
         return list(self._world_state)
 
     @property
-    def custom_rules(self) -> Iterable[tuple[int, str]]:
+    def custom_rules(self) -> Iterable[tuple[int, CustomRule]]:
         return list(self._custom_rules.items())
 
     async def process_message(
@@ -150,19 +150,21 @@ class GameEngine:
             player_name=player_name,
             player_inventory=player_inventory,
             context=message_context,
-            additional_rules=self._custom_rules.values(),
+            additional_rules=(rule.rule for rule in self._custom_rules.values()),
             sudo=sudo,
         )
         return await self._ai.prompt(message, system_prompt, GameModelResponse)
 
-    def add_custom_rule(self, rule: str, creator_id: int) -> Optional[int]:
+    def add_custom_rule(
+        self, rule: str, creator_id: int, secret: bool
+    ) -> Optional[int]:
         with self._db.connect() as db:
             user = db.get_user(creator_id)
             if not user:
                 return None
-            rule_id = db.add_custom_rule(rule, user.id)
-        self._custom_rules[rule_id] = rule
-        return rule_id
+            custom_rule = db.add_custom_rule(rule, user.id, secret)
+        self._custom_rules[custom_rule.id] = custom_rule
+        return custom_rule.id
 
     def remove_custom_rule(self, rule_id: int):
         with self._db.connect() as db:

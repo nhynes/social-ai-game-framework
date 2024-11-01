@@ -3,7 +3,7 @@ from contextlib import contextmanager
 from typing import Generator, Optional
 import time
 
-from .models import Message, MessageStatus, SimpleMessage, User
+from .models import CustomRule, Message, MessageStatus, SimpleMessage, User
 
 
 class DatabaseConnection:
@@ -120,16 +120,21 @@ class DatabaseConnection:
 
         return messages
 
-    def load_custom_rules(self) -> dict[int, str]:
-        self.cursor.execute("SELECT id, rule FROM custom_rules WHERE removed = 0")
-        return dict((row["id"], row["rule"]) for row in self.cursor.fetchall())
+    def load_custom_rules(self) -> list[CustomRule]:
+        self.cursor.execute(
+            "SELECT id, rule, secret FROM custom_rules WHERE removed = 0"
+        )
+        return [
+            CustomRule(id=row["id"], rule=row["rule"], secret=bool(row["secret"]))
+            for row in self.cursor.fetchall()
+        ]
 
-    def add_custom_rule(self, rule: str, creator_id: int, secret: bool = False) -> int:
+    def add_custom_rule(self, rule: str, creator_id: int, secret: bool) -> CustomRule:
         self.cursor.execute(
             "INSERT INTO custom_rules (rule, creator, secret) VALUES (?, ?, ?)",
             (rule, creator_id, secret),
         )
-        return self.cursor.fetchone()["id"]
+        return CustomRule(id=self.cursor.fetchone()["id"], rule=rule, secret=secret)
 
     def remove_custom_rule(self, rule_id: int):
         self.cursor.execute(

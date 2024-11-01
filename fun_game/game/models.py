@@ -59,3 +59,10 @@ class GameResponse:
 
     def mark_responded(self, upstream_reply_id: int):
         self._engine.mark_message_processed(self._message_id, upstream_reply_id)
+
+
+@dataclass
+class CustomRule:
+    id: int
+    rule: str
+    secret: bool

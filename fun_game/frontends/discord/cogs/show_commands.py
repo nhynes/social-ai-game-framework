@@ -5,7 +5,7 @@ from discord import app_commands
 from discord.ext import commands
 import discord
 
-from fun_game.frontends.discord import Bot, GuildState
+from fun_game.frontends.discord import Bot
 
 from .utils import paginate
 
@@ -29,25 +29,27 @@ class ShowCommands(commands.Cog):
         if not guild_state:
             return
 
+        items: Iterable[str]
+        empty_message: str
         if option == Options.rules:
-            items = [
+            items = (
                 rule[1].rule
                 for rule in guild_state.game_engine.custom_rules
                 if not rule[1].secret
-            ]
+            )
+            empty_message = "There are no custom rules."
         elif option == Options.inventory:
             items = guild_state.game_engine.player_inventory(interaction.user.id)
+            empty_message = "Your inventory is empty."
         else:
             items = guild_state.game_engine.world_state
+            empty_message = "The world is empty."
 
         if not items:
-            await interaction.response.send_message(
-                f"{"Your" if option == Options.inventory else "The"} {option.value} is empty.",
-                ephemeral=True,
-            )
+            await interaction.response.send_message(empty_message, ephemeral=True)
             return
-        replies = paginate(items)
-        for reply in replies:
+
+        for reply in paginate(items):
             await interaction.response.send_message(reply, ephemeral=True)
 
 

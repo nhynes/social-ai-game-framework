@@ -1,3 +1,5 @@
+from typing import Optional
+
 from discord import app_commands
 from discord.ext import commands
 import discord
@@ -40,7 +42,12 @@ class SudoCommands(commands.Cog):
             await interaction.response.send_message(reply, ephemeral=True)
 
     @rule_group.command(name="add")
-    async def add_rule(self, interaction: discord.Interaction, rule: str):
+    async def add_rule(
+        self,
+        interaction: discord.Interaction,
+        rule: str,
+        secret: Optional[bool] = False,
+    ):
         if not interaction.guild:
             return
 
@@ -48,10 +55,13 @@ class SudoCommands(commands.Cog):
         if not guild_state:
             return
 
-        rule_id = guild_state.game_engine.add_custom_rule(rule, interaction.user.id)
-        await interaction.response.send_message(
-            f"Successfully created rule #{rule_id}", ephemeral=True
+        rule_id = guild_state.game_engine.add_custom_rule(
+            rule, interaction.user.id, secret or False
         )
+        if rule_id:
+            await interaction.response.send_message(
+                f"Successfully created rule #{rule_id}", ephemeral=True
+            )
 
     @rule_group.command(name="remove")
     async def remove_rule(self, interaction: discord.Interaction, rule_id: int):
