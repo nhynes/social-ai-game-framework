@@ -117,7 +117,7 @@ def make_game_system_prompt(
             interaction_donts=_format_list(
                 f"DO NOT {s[0].lower()}{s[1:]}" for s in config.interaction_rules.dont
             ),
-            additional_rules=(_format_list(custom_rules) if custom_rules else None)
+            custom_rules=(_format_list(custom_rules) if custom_rules else None)
             or "None yet.",
             response_guidelines=_format_list(config.response_guidelines),
         )
