@@ -2,9 +2,16 @@ import logging
 from typing import AsyncContextManager, Callable, Iterable, Optional
 
 from fun_game.config import GameConfig
-from .database import Database, DatabaseConnection, SimpleMessage
+from .database import Database, DatabaseConnection
 from .ai import AIProvider
-from .models import CustomRule, GameContext, GameResponse
+from .models import (
+    CustomRule,
+    GameContext,
+    GameResponse,
+    Message,
+    MessageData,
+    SimpleMessage,
+)
 from .prompts import (
     FilterModelResponse,
     GameModelResponse,
@@ -20,21 +27,30 @@ class GameEngine:
     @classmethod
     def make_factory(cls, config: GameConfig) -> Callable[[str], "GameEngine"]:
         def _factory(instance_id: str) -> "GameEngine":
-            return cls(config, instance_id)
+            db = Database(f"data/{instance_id}.sqlite")
+            ai = AIProvider.default()
+            return cls(config, instance_id, ai=ai, db=db)
 
         return _factory
 
-    def __init__(self, config: GameConfig, instance_id: str):
+    def __init__(
+        self,
+        config: GameConfig,
+        instance_id: str,
+        *,
+        ai: Optional[AIProvider] = None,
+        db: Optional[Database] = None,
+    ):
         self._config = config
-        self._ai = AIProvider.default()
-        self._db = Database(f"data/{instance_id}.sqlite")
+        self._ai = ai if ai else AIProvider.default()
+        self._db = db if db else Database(f"data/{instance_id}.sqlite")
         self._world_state: set[str] = set()
         self._custom_rules: dict[int, CustomRule] = {}
         self._player_inventories: dict[int, set[str]] = {}
 
-        with self._db.connect() as db:
-            self._world_state = db.load_world_state()
-            self._custom_rules = {rule.id: rule for rule in db.load_custom_rules()}
+        with self._db.connect() as dbc:
+            self._world_state = dbc.load_world_state()
+            self._custom_rules = {rule.id: rule for rule in dbc.load_custom_rules()}
 
     @property
     def world_state(self) -> Iterable[str]:
@@ -63,79 +79,103 @@ class GameEngine:
 
     async def _do_process_message(self, context: GameContext) -> Optional[GameResponse]:
         with self._db.connect() as db:
-            user = db.get_or_create_user(context.user_id, context.user_name)
-            message = db.get_message(context.message_id)
+            message_data = self._prepare_message_data(db, context)
+            game_response = await self._generate_game_response(context, message_data)
+            reply_id = self._persist_response(db, context, message_data, game_response)
 
-            reply_to_message_id: Optional[int] = None
-            if context.reply_to_message_id:
-                reply_to_message = db.get_message(context.reply_to_message_id)
-                if reply_to_message:
-                    reply_to_message_id = reply_to_message.id
-
-            if message:
-                message_id = message.id
-                if message.status == "filtered" and context.force_feed:
-                    db.unfilter_message(message_id)
-            else:
-                message_id = db.add_message(
-                    context.message_content,
-                    sender_id=user.id,
-                    upstream_id=context.message_id,
-                    reply_to_id=reply_to_message_id,
-                )
-
-            message_context = db.get_message_context(message_id)
-
-            player_inventory = self._load_player_inventory(user.id, db)
-
-            logger.debug("generating response")
-            game_response = await self.process_game_action(
-                message=context.message_content,
-                world_state=self.world_state,
-                player_inventory=player_inventory,
-                player_name=user.name,
-                message_context=message_context,
-                sudo=context.sudo,
-            )
-
-            logger.debug("updating persistent game state")
-            db.update_game_state(
-                user_id=user.id,
-                world_changes=game_response.world_state_updates,
-                inventory_changes=game_response.player_inventory_updates,
-                trigger_message_id=context.message_id,
-            )
-            reply_id = db.add_message(
-                game_response.response,
-                sender_id=0,
-                upstream_id=None,
-                reply_to_id=message_id,
-            )
-
-        self._update_cached_state(game_response, user.id)
-
-        logger.debug("returning game response: %s", game_response.response)
+        self._update_cached_state(game_response, message_data.user.id)
         return GameResponse(
-            response_text=game_response.response,
-            _engine=self,
-            _message_id=reply_id,
+            response_text=game_response.response, _engine=self, _message_id=reply_id
+        )
+
+    def _prepare_message_data(
+        self, db: DatabaseConnection, context: GameContext
+    ) -> MessageData:
+        user = db.get_or_create_user(context.user_id, context.user_name)
+        message = db.get_message(context.message_id)
+        reply_to_message = (
+            db.get_message(context.reply_to_message_id)
+            if context.reply_to_message_id
+            else None
+        )
+
+        message_id = self._ensure_message_exists(db, context, user.id, reply_to_message)
+        message_context = db.get_message_context(message_id)
+        player_inventory = self._load_player_inventory(user.id, db)
+
+        return MessageData(user, message, message_id, message_context, player_inventory)
+
+    async def _generate_game_response(
+        self, context: GameContext, message_data: MessageData
+    ) -> GameModelResponse:
+        return await self._process_game_action(
+            message=context.message_content,
+            world_state=self.world_state,
+            player_inventory=message_data.player_inventory,
+            player_name=message_data.user.name,
+            message_context=message_data.message_context,
+            sudo=context.sudo,
+        )
+
+    def _persist_response(
+        self,
+        db: DatabaseConnection,
+        context: GameContext,
+        message_data: MessageData,
+        game_response: GameModelResponse,
+    ) -> int:
+        db.update_game_state(
+            user_id=message_data.user.id,
+            world_changes=game_response.world_state_updates,
+            inventory_changes=game_response.player_inventory_updates,
+            trigger_message_id=context.message_id,
+        )
+        return db.add_message(
+            game_response.response,
+            sender_id=0,
+            upstream_id=None,
+            reply_to_id=message_data.message_id,
+        )
+
+    def _ensure_message_exists(
+        self,
+        db: DatabaseConnection,
+        context: GameContext,
+        user_id: int,
+        reply_to_message: Optional[Message],
+    ) -> int:
+        message = db.get_message(context.message_id)
+        if message:
+            if message.status == "filtered" and context.force_feed:
+                db.unfilter_message(message.id)
+            return message.id
+
+        reply_to_id = reply_to_message.id if reply_to_message else None
+        return db.add_message(
+            context.message_content,
+            sender_id=user_id,
+            upstream_id=context.message_id,
+            reply_to_id=reply_to_id,
         )
 
     async def is_game_action(self, message: str) -> bool:
+        filter_response = await self._filter_message(message)
+        logger.debug("filter response: %s", filter_response)
+        if filter_response.confidence < 0.5:
+            return self._config.filter.default_behavior == "accept"
+        return filter_response.forward
+
+    async def _filter_message(self, message: str) -> FilterModelResponse:
         examples = self._config.filter.examples
-        filter_response = await self._ai.prompt_mini(
+        return await self._ai.prompt_mini(
             message,
             make_filter_system_prompt(
                 positive_examples=examples.accept, negative_examples=examples.reject
             ),
             FilterModelResponse,
         )
-        logger.debug("filter response: %s", filter_response)
-        if filter_response.confidence < 0.5:
-            return self._config.filter.default_behavior == "accept"
-        return filter_response.forward
 
-    async def process_game_action(
+    async def _process_game_action(
         self,
         message: str,
         world_state: Iterable[str],

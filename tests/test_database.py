@@ -138,12 +138,12 @@ def test_message_operations(db: Database):
         assert message is None
 
         # Verify initial state after creation
-        message = conn.cursor.execute(
+        m1 = conn.cursor.execute(
             "SELECT * FROM messages WHERE id = ?", (msg_id,)
         ).fetchone()
-        assert message["content"] == "Test message"
-        assert message["status"] == MessageStatus.FILTERED.value
-        assert message["upstream_id"] is None
+        assert m1["content"] == "Test message"
+        assert m1["status"] == MessageStatus.FILTERED.value
+        assert m1["upstream_id"] is None
 
         # Test marking sent
         conn.mark_message_sent(msg_id, 123)

@@ -1,6 +1,6 @@
 from enum import Enum
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Iterable, Optional
 
 if TYPE_CHECKING:
     from .engine import GameEngine
@@ -37,6 +37,15 @@ class User:
     id: int
     upstream_id: int
     name: str
+
+
+@dataclass
+class MessageData:
+    user: User
+    message: Optional[Message]
+    message_id: int
+    message_context: Iterable[SimpleMessage]
+    player_inventory: Iterable[str]
 
 
 @dataclass
