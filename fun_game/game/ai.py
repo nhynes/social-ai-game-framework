@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 import logging
 import os
 from typing import Optional, Type, Union
@@ -12,14 +13,28 @@ logger = logging.getLogger("game.ai")
 logger.setLevel(logging.DEBUG)
 
 
-class AIProvider:
+class AIProvider(ABC):
     @classmethod
     def default(cls):
-        return cls(
+        return DefaultAIProvider(
             AsyncAnthropic(api_key=os.environ["ANTHROPIC_API_KEY"]),
             AsyncOpenAI(api_key=os.environ["OPENAI_API_KEY"]),
         )
 
+    @abstractmethod
+    async def prompt_mini[
+        T: BaseModel
+    ](
+        self, user: str, system: str, model: Type[T], temperature: Optional[int] = 0
+    ) -> T:
+        pass
+
+    @abstractmethod
+    async def prompt[T: BaseModel](self, user: str, system: str, model: Type[T]) -> T:
+        pass
+
+
+class DefaultAIProvider(AIProvider):
     def __init__(self, anthropic_client: AsyncAnthropic, openai_client: AsyncOpenAI):
         self.anthropic = anthropic_client
         self.openai = openai_client

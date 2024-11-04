@@ -23,7 +23,7 @@ def db(db_path):
     return Database(db_path)
 
 
-def test_get_or_create_user(db):
+def test_get_or_create_user(db: Database):
     with db.connect() as conn:
         # Test creation
         user = conn.get_or_create_user(1, "test_user")
@@ -36,7 +36,7 @@ def test_get_or_create_user(db):
         assert user2.name == "updated_name"
 
 
-def test_get_user(db):
+def test_get_user(db: Database):
     with db.connect() as conn:
         # Test non-existent user
         assert conn.get_user(999) is None
@@ -49,7 +49,7 @@ def test_get_user(db):
         assert user.name == "test_user"
 
 
-def test_get_or_create_item(db):
+def test_get_or_create_item(db: Database):
     with db.connect() as conn:
         # Test creation
         item_id = conn.get_or_create_item("test_item")
@@ -60,7 +60,7 @@ def test_get_or_create_item(db):
         assert item_id == item_id2
 
 
-def test_get_message_context(db):
+def test_get_message_context(db: Database):
     with db.connect() as conn:
         # Create test users
         user_a = conn.get_or_create_user(1, "UserA")
@@ -88,7 +88,7 @@ def test_get_message_context(db):
         assert "today is a good day" in message_contents
 
 
-def test_custom_rules(db):
+def test_custom_rules(db: Database):
     with db.connect() as conn:
         user = conn.get_or_create_user(1, "test_user")
 
@@ -108,7 +108,7 @@ def test_custom_rules(db):
         assert len(conn.load_custom_rules()) == 0
 
 
-def test_reactions(db):
+def test_reactions(db: Database):
     with db.connect() as conn:
         user = conn.get_or_create_user(1, "test_user")
         msg_id = conn.add_message("Test message", user.id)
@@ -116,19 +116,25 @@ def test_reactions(db):
         # Test adding reaction
         conn.add_reaction(msg_id, user.id, "👍")
         conn.add_reaction(msg_id, user.id, "👍")
+        conn.cursor.execute("SELECT * FROM reactions")
+        reactions = conn.cursor.fetchall()
+        assert len(reactions) == 1
 
         # Test removing reaction
         conn.remove_reaction(msg_id, user.id, "👍")
         conn.remove_reaction(msg_id, user.id, "👍")
+        conn.cursor.execute("SELECT * FROM reactions")
+        reactions = conn.cursor.fetchall()
+        assert len(reactions) == 0
 
 
-def test_message_operations(db):
+def test_message_operations(db: Database):
     with db.connect() as conn:
         user = conn.get_or_create_user(1, "test_user")
 
         # Test adding message
         msg_id = conn.add_message("Test message", user.id, filtered=True)
-        message = conn.get_message(None)  # Should be None before marking sent
+        message = conn.get_message(msg_id)  # Should not have upstream id yet
         assert message is None
 
         # Verify initial state after creation
@@ -151,13 +157,13 @@ def test_message_operations(db):
         conn.unfilter_message(msg_id)
         conn.unfilter_message(msg_id)
         message = conn.get_message(123)
-        assert message.status == MessageStatus.UNFILTERED.value
+        assert message is not None and message.status == MessageStatus.UNFILTERED.value
 
         # Test marking irrelevant
         conn.mark_message_irrelevant(msg_id)
         conn.mark_message_irrelevant(msg_id)
         message = conn.get_message(123)
-        assert message.status == MessageStatus.IRRELEVANT.value
+        assert message is not None and message.status == MessageStatus.IRRELEVANT.value
 
         message = conn.get_message(123)
         assert message is not None
@@ -170,7 +176,7 @@ def test_message_operations(db):
         assert conn.get_message(999) is None
 
 
-def test_game_state(db):
+def test_game_state(db: Database):
     with db.connect() as conn:
         user = conn.get_or_create_user(1, "test_user")
 
@@ -206,7 +212,7 @@ def test_game_state(db):
         assert "item3" not in inventory
 
 
-def test_database_general_exception(db):
+def test_database_general_exception(db: Database):
     with pytest.raises(Exception):
         with db.connect():
             raise RuntimeError("Test exception")

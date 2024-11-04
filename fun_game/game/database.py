@@ -141,13 +141,13 @@ class DatabaseConnection:
 
     def add_reaction(self, message_id: int, user_id: Optional[int], reaction: str):
         self.cursor.execute(
-            "INSERT INTO reactions (message_id, user_id, reaction) VALUES (?, ?, ?)",
+            "INSERT OR IGNORE INTO reactions (message_id, user_id, reaction) VALUES (?, ?, ?)",
             (message_id, user_id, reaction),
         )
 
     def remove_reaction(self, message_id: int, user_id: int, reaction: str):
         self.cursor.execute(
-            "DELETE FROM reactions WHERE message_id = ? AND user_id = ? AND reaction = ?",
+            "DELETE FROM reactions WHERE user_id = ? AND message_id = ? AND reaction = ?",
             (message_id, user_id, reaction),
         )
 
@@ -379,6 +379,7 @@ class Database:
                     FOREIGN KEY (message_id) REFERENCES messages(id),
                     FOREIGN KEY (user_id) REFERENCES users(id)
                 );
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_reactions_unique ON reactions (message_id, user_id, reaction);
 
                 CREATE TABLE IF NOT EXISTS custom_rules (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
