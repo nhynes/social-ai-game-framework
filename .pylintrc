@@ -11,3 +11,4 @@ disable=
 
 [format]
 max-line-length=120
+dummy-variables-rgx=^_.*

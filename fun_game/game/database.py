@@ -48,77 +48,75 @@ class DatabaseConnection:
 
     def get_message_context(
         self,
-        reply_to: Optional[int],
+        base_message: int,
         size: int = 10,
     ) -> list[SimpleMessage]:
         """
-        Returns messages that are contextual to the present one.
-
-        Args:
-            user_id: The ID of the user who sent the message
-            reply_to: The id of the message being replied to, if any. `size` and `duration` start from here.
-            size: The number of messages to return, inclusive of the reply_to message, if provided.
-            max_age: The maximum duration in seconds from now/reply_to message for which messages will be included
+        Returns messages contextual to the provided base message.
+        A contextual message satisfies any of:
+            * sent up to `size` messages before the base message
+            * a message that was replied to by a message already in the context
+            * sent up to `size` messages before a replied-to message
         """
-        seen_messages = set()
-        messages = []
+        query = """
+            WITH RECURSIVE
+            previous_messages AS (
+                SELECT m.id, m.sender_id, m.content, u.username as sender
+                FROM messages m
+                JOIN users u ON m.sender_id = u.id
+                WHERE m.id <= :base_msg
+                ORDER BY m.id DESC
+                LIMIT :size
+            ),
 
-        def fetch_context(msg_id: Optional[int], remaining_size: int):
-            if not remaining_size:
-                return
+            reply_chain AS (
+                SELECT m.id, m.sender_id, m.content, m.reply_to_id, u.username as sender
+                FROM messages m
+                JOIN users u ON m.sender_id = u.id
+                WHERE m.id IN (SELECT id FROM previous_messages)
+                OR m.id = :base_msg
 
-            status_condition = f"""(
-                m.status IS NULL OR
-                (m.status != '{MessageStatus.IRRELEVANT.value}'
-                 AND m.status != '{MessageStatus.FILTERED.value}'))"""
+                UNION
 
-            if msg_id is None:
-                # Fetch recent messages
-                query = f"""
-                    SELECT m.id, u.username as sender, u.id as sender_id, m.content, m.reply_to_id
-                    FROM messages m
-                    JOIN users u ON m.sender_id = u.id
-                    WHERE {status_condition}
-                    ORDER BY m.created_at DESC
-                    LIMIT ?
-                """
-                self.cursor.execute(query, (remaining_size,))
-            else:
-                # Fetch messages before and including the specified message
-                query = f"""
-                    SELECT m.id, u.username as sender, u.id as sender_id, m.content, m.reply_to_id
-                    FROM messages m
-                    JOIN users u ON m.sender_id = u.id
-                    WHERE {status_condition} AND m.id <= ?
-                    ORDER BY m.created_at DESC
-                    LIMIT ?
-                """
-                self.cursor.execute(query, (msg_id, remaining_size))
+                SELECT m.id, m.sender_id, m.content, m.reply_to_id, u.username as sender
+                FROM messages m
+                JOIN users u ON m.sender_id = u.id
+                JOIN reply_chain rc ON m.id = rc.reply_to_id
+            ),
 
-            rows = self.cursor.fetchall()
-            for row in rows:
-                if row["id"] not in seen_messages:
-                    seen_messages.add(row["id"])
-                    messages.append(
-                        SimpleMessage(
-                            id=row["id"],
-                            sender=row["sender"],
-                            sender_id=row["sender_id"],
-                            content=row["content"],
-                        )
-                    )
+            reply_context AS (
+                SELECT DISTINCT m.id, m.sender_id, m.content, u.username as sender
+                FROM messages m
+                JOIN users u ON m.sender_id = u.id
+                JOIN reply_chain rc
+                WHERE m.id <= rc.id
+                AND m.id >= rc.id - :size
+                AND m.id NOT IN (SELECT id FROM reply_chain)
+            ),
 
-                    # Recursively fetch context for replied messages
-                    if row["reply_to_id"] and row["reply_to_id"] not in seen_messages:
-                        fetch_context(row["reply_to_id"], size)
+            combined_context AS (
+                SELECT id, sender_id, sender, content FROM previous_messages
+                UNION
+                SELECT id, sender_id, sender, content FROM reply_chain
+                UNION
+                SELECT id, sender_id, sender, content FROM reply_context
+            )
 
-        # Start fetching context
-        fetch_context(reply_to, size)
+            SELECT DISTINCT id, sender, sender_id, content
+            FROM combined_context
+            WHERE id != :base_msg
+            ORDER BY id;
+        """
 
-        # Sort messages chronologically
-        messages.sort(key=lambda m: m.id)
+        params = {"base_msg": base_message, "size": size}
 
-        return messages
+        self.cursor.execute(query, params)
+        rows = self.cursor.fetchall()
+
+        return [
+            SimpleMessage(id=row[0], sender=row[1], sender_id=row[2], content=row[3])
+            for row in rows
+        ]
 
     def load_custom_rules(self) -> list[CustomRule]:
         self.cursor.execute(
@@ -138,7 +136,7 @@ class DatabaseConnection:
 
     def remove_custom_rule(self, rule_id: int):
         self.cursor.execute(
-            "UPDATE custom_rules SET removed = 0 WHERE id = ?", (rule_id,)
+            "UPDATE custom_rules SET removed = 1 WHERE id = ?", (rule_id,)
         )
 
     def add_reaction(self, message_id: int, user_id: Optional[int], reaction: str):

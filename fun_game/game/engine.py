@@ -84,7 +84,7 @@ class GameEngine:
                     reply_to_id=reply_to_message_id,
                 )
 
-            message_context = db.get_message_context(context.reply_to_message_id)
+            message_context = db.get_message_context(message_id)
 
             player_inventory = self._load_player_inventory(user.id, db)
 

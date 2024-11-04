@@ -1,3 +1,5 @@
 venv/
 data/
+htmlcov/
 .env
+.coverage
