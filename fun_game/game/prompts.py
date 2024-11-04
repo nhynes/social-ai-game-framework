@@ -20,13 +20,13 @@ Your task is to determine whether to forward the message to the (somewhat expens
 Respond with ONLY valid JSON in the following format WITHOUT code fence or anything else:
 
 ```
-type Response = {
+type Response = {{
     // Whether the message is in category (a) and should be forwarded
     forward: boolean;
 
     // A float from 0-1 describing how confident you are in your decision. 1 is perfectly certain, 0 is perfectly uncertain.
     confidence: number;
-}
+}}
 ```
 
 EXAMPLES:
@@ -84,7 +84,7 @@ Respond in JSON according to the following schema WITHOUT a code fence or anythi
 // The changes must be very detailed because the context in which they were created is not saved.
 type Changes = Record<string, boolean>;
 
-type ModelResponse = {
+type ModelResponse = {{
     // The response to the player.
     response: string;
 
@@ -95,7 +95,7 @@ type ModelResponse = {
     // Changes to apply to the player's inventory, if any.
     // The changes must be very detailed because the context in which they were created is not saved.
     player_inventory_updates: Changes | null;
-};
+}};
 ```
 """
 
@@ -106,7 +106,7 @@ def make_game_system_prompt(
     player_name: str,
     player_inventory: Iterable[str],
     context: Iterable[SimpleMessage],
-    additional_rules: Optional[Iterable[str]] = None,
+    custom_rules: Optional[Iterable[str]] = None,
     sudo: bool = False,
 ) -> str:
     components = [
@@ -117,9 +117,7 @@ def make_game_system_prompt(
             interaction_donts=_format_list(
                 f"DO NOT {s[0].lower()}{s[1:]}" for s in config.interaction_rules.dont
             ),
-            additional_rules=(
-                _format_list(additional_rules) if additional_rules else None
-            )
+            additional_rules=(_format_list(custom_rules) if custom_rules else None)
             or "None yet.",
             response_guidelines=_format_list(config.response_guidelines),
         )

@@ -64,8 +64,6 @@ class GameEngine:
     async def _do_process_message(self, context: GameContext) -> Optional[GameResponse]:
         with self._db.connect() as db:
             user = db.get_or_create_user(context.user_id, context.user_name)
-            user_id = user.id
-            user_name = user.name
             message = db.get_message(context.message_id)
 
             reply_to_message_id: Optional[int] = None
@@ -81,28 +79,28 @@ class GameEngine:
             else:
                 message_id = db.add_message(
                     context.message_content,
-                    sender_id=user_id,
+                    sender_id=user.id,
                     upstream_id=context.message_id,
                     reply_to_id=reply_to_message_id,
                 )
 
             message_context = db.get_message_context(context.reply_to_message_id)
 
-            player_inventory = self._load_player_inventory(user_id, db)
+            player_inventory = self._load_player_inventory(user.id, db)
 
             logger.debug("generating response")
             game_response = await self.process_game_action(
                 message=context.message_content,
                 world_state=self.world_state,
                 player_inventory=player_inventory,
-                player_name=user_name,
+                player_name=user.name,
                 message_context=message_context,
                 sudo=context.sudo,
             )
 
             logger.debug("updating persistent game state")
             db.update_game_state(
-                user_id=context.user_id,
+                user_id=user.id,
                 world_changes=game_response.world_state_updates,
                 inventory_changes=game_response.player_inventory_updates,
                 trigger_message_id=context.message_id,
@@ -114,7 +112,7 @@ class GameEngine:
                 reply_to_id=message_id,
             )
 
-        self._update_cached_state(game_response, context.user_id)
+        self._update_cached_state(game_response, user.id)
 
         logger.debug("returning game response: %s", game_response.response)
         return GameResponse(
@@ -152,7 +150,7 @@ class GameEngine:
             player_name=player_name,
             player_inventory=player_inventory,
             context=message_context,
-            additional_rules=(rule.rule for rule in self._custom_rules.values()),
+            custom_rules=(rule.rule for rule in self._custom_rules.values()),
             sudo=sudo,
         )
         return await self._ai.prompt(message, system_prompt, GameModelResponse)

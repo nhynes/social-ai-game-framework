@@ -40,10 +40,10 @@ class Bot(commands.Bot):
 
     async def setup_hook(self):
         for ext in [
-            "bot.cogs.message_handler",
-            "bot.cogs.sudo_commands",
-            "bot.cogs.show_commands",
-            "bot.cogs.reaction_handler",
+            "frontends.discord.cogs.message_handler",
+            "frontends.discord.cogs.sudo_commands",
+            "frontends.discord.cogs.show_commands",
+            "frontends.discord.cogs.reaction_handler",
         ]:
             await self.load_extension(ext)
         await self.tree.sync()

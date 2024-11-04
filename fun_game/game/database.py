@@ -15,7 +15,7 @@ class DatabaseConnection:
         self.cursor.execute(
             """
             INSERT INTO users (username, upstream_id)
-            VALUES (?, ?, ?)
+            VALUES (?, ?)
             ON CONFLICT(upstream_id)
             DO UPDATE SET username = excluded.username
             RETURNING id
@@ -131,7 +131,7 @@ class DatabaseConnection:
 
     def add_custom_rule(self, rule: str, creator_id: int, secret: bool) -> CustomRule:
         self.cursor.execute(
-            "INSERT INTO custom_rules (rule, creator, secret) VALUES (?, ?, ?)",
+            "INSERT INTO custom_rules (rule, creator, secret) VALUES (?, ?, ?) RETURNING id",
             (rule, creator_id, secret),
         )
         return CustomRule(id=self.cursor.fetchone()["id"], rule=rule, secret=secret)
@@ -390,7 +390,7 @@ class Database:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     removed INTEGER NOT NULL DEFAULT 0,
                     FOREIGN KEY (creator) REFERENCES users(id)
-                )
-                CREATE INDEX idx_custom_rules_active ON custom_rules (removed) WHERE removed = 0;
+                );
+                CREATE INDEX IF NOT EXISTS idx_custom_rules_active ON custom_rules (removed) WHERE removed = 0;
                 """
             )
