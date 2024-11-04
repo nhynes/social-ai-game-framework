@@ -133,7 +133,9 @@ class GameEngine:
             FilterModelResponse,
         )
         logger.debug("filter response: %s", filter_response)
-        return filter_response.forward and filter_response.confidence > 0.5
+        if filter_response.confidence < 0.5:
+            return self._config.filter.default_behavior == "accept"
+        return filter_response.forward
 
     async def process_game_action(
         self,
