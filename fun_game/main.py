@@ -21,7 +21,6 @@ async def main():
     args = parser.parse_args()
 
     config = Config.load(args.config)
-    print(config)
 
     if config.frontend == "discord":
         async with Discord(engine_factory=GameEngine.make_factory(config.game)) as bot:

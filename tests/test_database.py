@@ -81,7 +81,6 @@ def test_get_message_context(db: Database):
 
         # Check that we get exactly the expected messages
         message_contents = [m.content for m in messages]
-        print(message_contents)
         assert len(message_contents) == 3
         assert "hello A" in message_contents
         assert "hello B" in message_contents

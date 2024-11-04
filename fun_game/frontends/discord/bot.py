@@ -61,10 +61,9 @@ class Bot(commands.Bot):
         # Look for existing channel
         channel = discord.utils.get(guild.channels, id=1300287188365475940)
         if not channel:
-            print("no rosys-llm-playground channel")
+            # no rosys-llm-playground channel. TODO: make configurable
             channel = discord.utils.get(guild.channels, name="fun-game")
             if not channel:
-                print("no fun-game channel")
                 try:
                     channel = await guild.create_text_channel("fun-game")
                     logger.info("Created channel #fun-game in %s", guild.name)
