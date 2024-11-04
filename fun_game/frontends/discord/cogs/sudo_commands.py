@@ -39,7 +39,9 @@ class SudoCommands(commands.Cog):
             prefix="",
         )
         if not replies:
-            await interaction.response.send_message("There are no custom rules yet.", ephemeral=True)
+            await interaction.response.send_message(
+                "There are no custom rules yet.", ephemeral=True
+            )
             return
 
         for reply in replies:

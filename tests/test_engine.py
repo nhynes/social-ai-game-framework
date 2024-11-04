@@ -1,5 +1,8 @@
-import pytest
+# pylint: disable=redefined-outer-name,protected-access
+
 from unittest.mock import AsyncMock, Mock, MagicMock
+
+import pytest
 
 from fun_game.config import (
     GameConfig,
