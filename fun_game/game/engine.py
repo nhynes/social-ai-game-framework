@@ -199,7 +199,7 @@ class GameEngine:
         self, rule: str, creator_id: int, secret: bool
     ) -> Optional[int]:
         with self._db.connect() as db:
-            user = db.get_user(creator_id)
+            user = db.get_or_create_user(creator_id, "<unknown>")
             if not user:
                 return None
             custom_rule = db.add_custom_rule(rule, user.id, secret)
@@ -243,7 +243,7 @@ class GameEngine:
 
     def player_inventory(self, user_id: int) -> Iterable[str]:
         with self._db.connect() as db:
-            user = db.get_user(user_id)
+            user = db.get_or_create_user(user_id, "<unknown>")
             if not user:
                 return []
             return self._load_player_inventory(user.id, db)
