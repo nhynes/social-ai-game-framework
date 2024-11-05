@@ -8,14 +8,27 @@ from fun_game.config import EngineConfig
 from .models import SimpleMessage
 
 # pylint: disable=line-too-long
-_FILTER_SYSTEM_PROMPT = """The user message is from a general discussion channel.
+_FILTER_SYSTEM_PROMPT = """context
 
+The user message is from a general discussion channel.
 The channel contains messages meant for either:
 
 a) a simulation game that responds to natural language, or
 b) other users in the channel who may be talking with each other about the game or any other topic
 
-Your task is to determine whether to forward the message to the (somewhat expensive) simulator or not forward the message and do nothing. Message in category (a) must be forwarded while messages in category (b) must not be forwarded.
+Your task is to determine whether or not to forward the message to the (somewhat expensive) simulator.
+Messages in category A must be forwarded, while messages in category B should not be forwarded.
+The simulator will properly handle misclassified messages from category B, so Type I errors are less harmful than Type II errors.
+
+EXAMPLES:
+
+1. Forward things like these:
+{positive_examples}
+
+2. Do not forward things like these:
+{negative_examples}
+
+RESPONSE FORMAT:
 
 Respond with ONLY valid JSON in the following format WITHOUT code fence or anything else:
 
@@ -28,14 +41,6 @@ type Response = {{
     confidence: number;
 }}
 ```
-
-EXAMPLES:
-
-Forward things like these:
-{positive_examples}
-
-Do not forward things like these:
-{negative_examples}
 """
 
 
