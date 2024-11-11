@@ -204,10 +204,11 @@ class GameEngine:
         self._custom_rules[custom_rule.id] = custom_rule
         return custom_rule.id
 
-    def remove_custom_rule(self, rule_id: int):
+    def remove_custom_rules(self, rule_ids: Iterable[int]):
         with self._db.connect() as db:
-            db.remove_custom_rule(rule_id)
-        del self._custom_rules[rule_id]
+            for rule_id in rule_ids:
+                db.remove_custom_rule(rule_id)
+                del self._custom_rules[rule_id]
 
     def record_response_reaction(
         self,

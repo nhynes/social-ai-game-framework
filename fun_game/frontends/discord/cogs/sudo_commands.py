@@ -1,3 +1,5 @@
+from typing import Iterable
+
 from discord import app_commands
 from discord.ext import commands
 import discord
@@ -68,7 +70,7 @@ class SudoCommands(commands.Cog):
             )
 
     @rule_group.command(name="remove")
-    async def remove_rule(self, interaction: discord.Interaction, rule_id: int):
+    async def remove_rule(self, interaction: discord.Interaction, rules: str):
         if not interaction.guild:
             return
 
@@ -76,15 +78,40 @@ class SudoCommands(commands.Cog):
         if not guild_state:
             return
 
-        guild_state.game_engine.remove_custom_rule(rule_id)
+        try:
+            rule_ids = parse_range_csv(rules)
+            guild_state.game_engine.remove_custom_rules(rule_ids)
+            await interaction.response.send_message(
+                f"Successfully removed {len(rules)} rules"
+            )
+        except ValueError:
+            await interaction.response.send_message(
+                f"Failed to understand rules. Please format as comma-separated numbers or ranges"
+            )
 
     @state_group.command(name="add")
     async def add_state(self, interaction: discord.Interaction, state: str):
-        pass
+        await interaction.response.send_message("Unimplemented")
 
     @state_group.command(name="remove")
     async def remove_state(self, interaction: discord.Interaction, state: str):
-        pass
+        await interaction.response.send_message("Unimplemented")
+
+
+def parse_range_csv(page_string) -> Iterable[int]:
+    """
+    Parses print job page numbers format into a list of integers.
+    """
+    items: set[int] = set()
+    for part in page_string.split(","):
+        if "-" in part:
+            start, end = map(int, part.split("-"))
+            if start <= end:
+                for i in range(start, end + 1):
+                    items.add(i)
+        else:
+            items.add(part)
+    return items
 
 
 async def setup(bot):
