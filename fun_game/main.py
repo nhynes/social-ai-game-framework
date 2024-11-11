@@ -22,8 +22,10 @@ async def main():
 
     config = Config.load(args.config)
 
-    if config.frontend == "discord":
-        async with Discord(engine_factory=GameEngine.make_factory(config.game)) as bot:
+    if config.frontend.discord:
+        async with Discord(
+            config.frontend.discord, engine_factory=GameEngine.make_factory(config.game)
+        ) as bot:
             try:
                 await bot.start(os.environ["DISCORD_TOKEN"])
             except discord.LoginFailure:

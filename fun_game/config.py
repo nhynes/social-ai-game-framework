@@ -1,7 +1,8 @@
 import tomllib as toml
 from typing import Literal
+from typing_extensions import Self
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 
 class FilterExamples(BaseModel):
@@ -31,8 +32,22 @@ class GameConfig(BaseModel):
     engine: EngineConfig
 
 
+class DiscordFrontendConfig(BaseModel):
+    channel_name: str
+
+
+class FrontendConfig(BaseModel):
+    discord: DiscordFrontendConfig | None = None
+
+    @model_validator(mode="after")
+    def check_only_one(self) -> Self:
+        if len(self.model_dump(exclude_unset=True)) != 1:
+            raise ValueError("Frontend config must be set. Available options: discord")
+        return self
+
+
 class Config(BaseModel):
-    frontend: Literal["discord"]
+    frontend: FrontendConfig
 
     game: GameConfig
 

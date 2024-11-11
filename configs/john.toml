@@ -1,4 +1,5 @@
-frontend = "discord"
+[frontend.discord]
+channel_name = "john"
 
 [game.filter]
 default_behavior = "accept"

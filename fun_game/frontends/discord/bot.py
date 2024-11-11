@@ -7,6 +7,7 @@ from typing import Callable
 import discord
 from discord.ext import commands
 
+from fun_game.config import DiscordFrontendConfig
 from fun_game.game.engine import GameEngine
 
 from .guild_state import GuildState
@@ -17,7 +18,9 @@ logger = logging.getLogger("bot")
 
 
 class Bot(commands.Bot):
-    def __init__(self, engine_factory: Callable[[str], GameEngine]) -> None:
+    def __init__(
+        self, config: DiscordFrontendConfig, engine_factory: Callable[[str], GameEngine]
+    ) -> None:
         intents = discord.Intents.default()
         intents.message_content = True
         intents.messages = True
@@ -30,6 +33,7 @@ class Bot(commands.Bot):
             proxy=os.environ.get("HTTPS_PROXY"),
         )
 
+        self._config = config
         self.guild_states: dict[int, GuildState] = {}
         self._engine_factory = engine_factory
         self.ensure_data_directory()
@@ -59,20 +63,19 @@ class Bot(commands.Bot):
         )
 
         # Look for existing channel
-        channel = discord.utils.get(guild.channels, id=1300287188365475940)
+        channel = discord.utils.get(guild.channels, name=self._config.channel_name)
         if not channel:
-            # no rosys-llm-playground channel. TODO: make configurable
-            channel = discord.utils.get(guild.channels, name="fun-game")
-            if not channel:
-                try:
-                    channel = await guild.create_text_channel("fun-game")
-                    logger.info("Created channel #fun-game in %s", guild.name)
-                except discord.Forbidden:
-                    logger.error(
-                        "Bot doesn't have permission to create channels in %s",
-                        guild.name,
-                    )
-                    return
+            try:
+                channel = await guild.create_text_channel(self._config.channel_name)
+                logger.info(
+                    "Created channel #%s in %s", self._config.channel_name, guild.name
+                )
+            except discord.Forbidden:
+                logger.error(
+                    "Bot doesn't have permission to create channels in %s",
+                    guild.name,
+                )
+                return
 
         if not isinstance(channel, discord.TextChannel):
             return
