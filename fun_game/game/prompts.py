@@ -1,5 +1,5 @@
 from textwrap import dedent
-from typing import Iterable, Optional
+from typing import Iterable
 
 from pydantic import BaseModel
 
@@ -111,7 +111,7 @@ def make_game_system_prompt(
     player_name: str,
     player_inventory: Iterable[str],
     context: Iterable[SimpleMessage],
-    custom_rules: Optional[Iterable[str]] = None,
+    custom_rules: Iterable[str] | None = None,
     sudo: bool = False,
 ) -> str:
     components = [
@@ -181,7 +181,7 @@ def make_game_system_prompt(
     return "\n\n---\n\n".join(components)
 
 
-def _format_list(items: Iterable[str], prefix: Optional[str] = "- ") -> str:
+def _format_list(items: Iterable[str], prefix: str | None = "- ") -> str:
     return "\n".join(f"{prefix}{item}" for item in items)
 
 
@@ -195,6 +195,6 @@ class GameModelResponse(BaseModel):
     # The response to the player
     response: str
     # Changes to apply to the world state, if any
-    world_state_updates: Optional[Changes]
+    world_state_updates: Changes | None
     # Changes to apply to the player's inventory, if any
-    player_inventory_updates: Optional[Changes]
+    player_inventory_updates: Changes | None

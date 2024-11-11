@@ -1,6 +1,6 @@
 from enum import Enum
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Iterable, Optional
+from typing import TYPE_CHECKING, Iterable
 
 if TYPE_CHECKING:
     from .engine import GameEngine
@@ -24,7 +24,7 @@ class MessageStatus(Enum):
 @dataclass
 class Message:
     id: int
-    upstream_id: Optional[int]
+    upstream_id: int | None
     sender_id: int
     content: str
     reply_to: int
@@ -42,7 +42,7 @@ class User:
 @dataclass
 class MessageData:
     user: User
-    message: Optional[Message]
+    message: Message | None
     message_id: int
     message_context: Iterable[SimpleMessage]
     player_inventory: Iterable[str]
@@ -54,7 +54,7 @@ class GameContext:
     user_name: str
     message_content: str
     message_id: int
-    reply_to_message_id: Optional[int]
+    reply_to_message_id: int | None
     sudo: bool = False
     force_feed: bool = False
 

@@ -1,6 +1,6 @@
 import sqlite3
 from contextlib import contextmanager
-from typing import Generator, Optional
+from typing import Generator
 import time
 
 from .models import CustomRule, Message, MessageStatus, SimpleMessage, User
@@ -25,7 +25,7 @@ class DatabaseConnection:
         user_id = self.cursor.fetchone()["id"]
         return User(id=user_id, upstream_id=upstream_id, name=display_name)
 
-    def get_user(self, upstream_id: int) -> Optional[User]:
+    def get_user(self, upstream_id: int) -> User | None:
         self.cursor.execute(
             "SELECT * FROM users WHERE upstream_id = ?",
             (upstream_id,),
@@ -139,7 +139,7 @@ class DatabaseConnection:
             "UPDATE custom_rules SET removed = 1 WHERE id = ?", (rule_id,)
         )
 
-    def add_reaction(self, message_id: int, user_id: Optional[int], reaction: str):
+    def add_reaction(self, message_id: int, user_id: int | None, reaction: str):
         self.cursor.execute(
             "INSERT OR IGNORE INTO reactions (message_id, user_id, reaction) VALUES (?, ?, ?)",
             (message_id, user_id, reaction),
@@ -155,9 +155,9 @@ class DatabaseConnection:
         self,
         content: str,
         sender_id: int,
-        upstream_id: Optional[int] = None,
-        reply_to_id: Optional[int] = None,
-        filtered: Optional[bool] = False,
+        upstream_id: int | None = None,
+        reply_to_id: int | None = None,
+        filtered: bool | None = False,
     ) -> int:
         self.cursor.execute(
             """INSERT INTO messages (content, sender_id, upstream_id, reply_to_id, status)
@@ -194,7 +194,7 @@ class DatabaseConnection:
             (message_id,),
         )
 
-    def get_message(self, upstream_id: int) -> Optional[Message]:
+    def get_message(self, upstream_id: int) -> Message | None:
         self.cursor.execute(
             "SELECT * FROM messages WHERE upstream_id = ?",
             (upstream_id,),
@@ -215,9 +215,9 @@ class DatabaseConnection:
     def update_game_state(
         self,
         user_id: int,
-        world_changes: Optional[dict[str, bool]],
-        inventory_changes: Optional[dict[str, bool]],
-        trigger_message_id: Optional[int],  # pylint: disable=unused-argument
+        world_changes: dict[str, bool] | None,
+        inventory_changes: dict[str, bool] | None,
+        trigger_message_id: int | None,  # pylint: disable=unused-argument
     ):
         # XXX: this should probably be version controlled and associated with a particular request id
 

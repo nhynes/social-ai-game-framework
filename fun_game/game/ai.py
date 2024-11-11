@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 import logging
 import os
-from typing import Optional, Type, Union
+from typing import Type, Union
 
 from anthropic import AsyncAnthropic
 import anthropic.types
@@ -24,9 +24,7 @@ class AIProvider(ABC):
     @abstractmethod
     async def prompt_mini[
         T: BaseModel
-    ](
-        self, user: str, system: str, model: Type[T], temperature: Optional[int] = 0
-    ) -> T:
+    ](self, user: str, system: str, model: Type[T], temperature: int | None = 0) -> T:
         pass
 
     @abstractmethod
@@ -41,9 +39,7 @@ class DefaultAIProvider(AIProvider):
 
     async def prompt_mini[
         T: BaseModel
-    ](
-        self, user: str, system: str, model: Type[T], temperature: Optional[int] = 0
-    ) -> T:
+    ](self, user: str, system: str, model: Type[T], temperature: int | None = 0) -> T:
         response = await self.openai.chat.completions.create(
             model="gpt-4o-mini",
             max_tokens=1024,

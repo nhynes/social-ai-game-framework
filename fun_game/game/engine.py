@@ -1,5 +1,5 @@
 import logging
-from typing import AsyncContextManager, Callable, Iterable, Optional
+from typing import AsyncContextManager, Callable, Iterable
 
 from fun_game.config import GameConfig
 from .database import Database, DatabaseConnection
@@ -38,8 +38,8 @@ class GameEngine:
         config: GameConfig,
         instance_id: str,
         *,
-        ai: Optional[AIProvider] = None,
-        db: Optional[Database] = None,
+        ai: AIProvider | None = None,
+        db: Database | None = None,
     ):
         self._config = config
         self._ai = ai if ai else AIProvider.default()
@@ -63,8 +63,8 @@ class GameEngine:
     async def process_message(
         self,
         context: GameContext,
-        contextmanager: Optional[Callable[[], AsyncContextManager]] = None,
-    ) -> Optional[GameResponse]:
+        contextmanager: Callable[[], AsyncContextManager] | None = None,
+    ) -> GameResponse | None:
         # Check if message is for the game
         if not context.force_feed:
             if not await self.is_game_action(context.message_content):
@@ -77,7 +77,7 @@ class GameEngine:
         else:
             return await self._do_process_message(context)
 
-    async def _do_process_message(self, context: GameContext) -> Optional[GameResponse]:
+    async def _do_process_message(self, context: GameContext) -> GameResponse | None:
         with self._db.connect() as db:
             message_data = self._prepare_message_data(db, context)
             game_response = await self._generate_game_response(context, message_data)
@@ -142,7 +142,7 @@ class GameEngine:
         db: DatabaseConnection,
         context: GameContext,
         user_id: int,
-        reply_to_message: Optional[Message],
+        reply_to_message: Message | None,
     ) -> int:
         message = db.get_message(context.message_id)
         if message:
@@ -195,9 +195,7 @@ class GameEngine:
         )
         return await self._ai.prompt(message, system_prompt, GameModelResponse)
 
-    def add_custom_rule(
-        self, rule: str, creator_id: int, secret: bool
-    ) -> Optional[int]:
+    def add_custom_rule(self, rule: str, creator_id: int, secret: bool) -> int | None:
         with self._db.connect() as db:
             user = db.get_or_create_user(creator_id, "<unknown>")
             if not user:

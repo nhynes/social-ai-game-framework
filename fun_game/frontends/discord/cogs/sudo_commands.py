@@ -1,5 +1,3 @@
-from typing import Optional
-
 from discord import app_commands
 from discord.ext import commands
 import discord
@@ -52,7 +50,7 @@ class SudoCommands(commands.Cog):
         self,
         interaction: discord.Interaction,
         rule: str,
-        secret: Optional[bool] = False,
+        secret: bool | None = False,
     ):
         if not interaction.guild:
             return
