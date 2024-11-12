@@ -79,6 +79,7 @@ PLAYER RESPONSES:
 
 ADDITIONAL RULES:
 {custom_rules}
+Append 4 sentences that describe the current state of the game to the end of the response field. Prepend this part with CURRENT STATE IS .
 
 RESPONSE FORMAT:
 Respond in JSON according to the following schema WITHOUT a code fence or anything else.
@@ -90,7 +91,7 @@ Respond in JSON according to the following schema WITHOUT a code fence or anythi
 type Changes = Record<string, boolean>;
 
 type ModelResponse = {{
-    // The response to the player.
+    // The response to the player. Must necessarily end with 4 sentences that describe the current state of the game to the end of the response field.
     response: string;
 
     // Changes to apply to the world state, if any.

@@ -62,6 +62,7 @@ class GameContext:
 @dataclass
 class GameResponse:
     response_text: str
+    response_image: str
 
     _message_id: int
     _engine: "GameEngine"

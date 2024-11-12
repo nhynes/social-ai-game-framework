@@ -108,8 +108,7 @@ async def do_handle_message(
         logger.debug("game did not produce a response")
         return
     logger.debug("got game response")
-
-    reply = await message.reply(game_response.response_text)
+    reply = await message.reply(game_response.response_text, embed=discord.Embed().set_image(url=game_response.response_image))
     game_response.mark_responded(reply.id)
     add_reactions(reply, ["👍", "👎"])
 

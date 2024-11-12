@@ -84,8 +84,16 @@ class GameEngine:
             reply_id = self._persist_response(db, context, message_data, game_response)
 
         self._update_cached_state(game_response, message_data.user.id)
+
+        # generate image here
+        # Objectively describe the state of the world
+        # world_state_description = await self._ai.prompt(user="Describe the current state of the world in 10 sentences so that I can make an illustration.", system="{}", model=GameModelResponse)
+
+        # response_image_url = await self._ai.prompt_dalle(prompt="draw an illustration based on the current state: " + world_state_description.response)
+        response_image_url = await self._ai.prompt_dalle(prompt="draw an illustration based on the current state described in: " + game_response.response)
+
         return GameResponse(
-            response_text=game_response.response, _engine=self, _message_id=reply_id
+            response_text=game_response.response.split("CURRENT STATE")[0], response_image=response_image_url, _engine=self, _message_id=reply_id
         )
 
     def _prepare_message_data(
@@ -193,6 +201,8 @@ class GameEngine:
             custom_rules=(rule.rule for rule in self._custom_rules.values()),
             sudo=sudo,
         )
+        logger.info("System prompt is")
+        logger.info(system_prompt)
         return await self._ai.prompt(message, system_prompt, GameModelResponse)
 
     def add_custom_rule(self, rule: str, creator_id: int, secret: bool) -> int | None:

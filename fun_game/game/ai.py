@@ -37,6 +37,24 @@ class DefaultAIProvider(AIProvider):
         self.anthropic = anthropic_client
         self.openai = openai_client
 
+    async def prompt_dalle[
+    T: BaseModel
+    ](
+            self, prompt: str
+    ) -> str:
+        """Generates an image with Dall-E 3 and returns the URL."""
+        response = await self.openai.images.generate(
+            model="dall-e-3",
+            prompt="""
+            Digital objective illustration of the top down view of the current state in this prompt:
+            """ + \
+                   prompt,
+            size="1024x1024",
+            quality="standard",
+            n=1,
+        )
+        return response.data[0].url
+
     async def prompt_mini[
         T: BaseModel
     ](self, user: str, system: str, model: Type[T], temperature: int | None = 0) -> T:
