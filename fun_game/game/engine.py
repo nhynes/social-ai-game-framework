@@ -5,6 +5,7 @@ from fun_game.config import GameConfig
 from .database import Database, DatabaseConnection
 from .ai import AIProvider
 from .models import (
+    Objective,
     CustomRule,
     GameContext,
     GameResponse,
@@ -47,10 +48,12 @@ class GameEngine:
         self._world_state: set[str] = set()
         self._custom_rules: dict[int, CustomRule] = {}
         self._player_inventories: dict[int, set[str]] = {}
+        self._objectives: dict[int, list[Objective]] = {}
 
         with self._db.connect() as dbc:
             self._world_state = dbc.load_world_state()
             self._custom_rules = {rule.id: rule for rule in dbc.load_custom_rules()}
+            self._objectives = dbc.load_objectives()
 
     @property
     def world_state(self) -> Iterable[str]:
@@ -191,6 +194,11 @@ class GameEngine:
             player_inventory=player_inventory,
             context=message_context,
             custom_rules=(rule.rule for rule in self._custom_rules.values()),
+            objectives = (
+                obj.objective_text
+                for obj_list in self._objectives.values()
+                for obj in obj_list
+            ),
             sudo=sudo,
         )
         return await self._ai.prompt(message, system_prompt, GameModelResponse)
@@ -209,6 +217,33 @@ class GameEngine:
             for rule_id in rule_ids:
                 db.remove_custom_rule(rule_id)
                 del self._custom_rules[rule_id]
+
+    def add_objective(self, objective: str, upstream_user_id: int, user_name: str = "<unknown>") -> int | None:
+        with self._db.connect() as db:
+            user = db.get_or_create_user(upstream_user_id, user_name)
+            if not user:
+                return None
+            objective_data = db.add_objective(objective, user.id)
+        if upstream_user_id not in self._objectives:
+            self._objectives[upstream_user_id] = []
+        self._objectives[upstream_user_id].append(objective_data)
+        return objective_data.id
+
+    def leaderboard(self) -> Iterable[str]:
+        if not self._objectives:
+            return None
+
+        sorted_leaderboard = sorted(
+            self._objectives.items(),
+            key=lambda x: sum(obj.score for obj in x[1]),
+            reverse=True
+        )
+
+        for cnt, (upstream_user_id, objectives) in enumerate(sorted_leaderboard, start=1):
+            total_score = sum(obj.score for obj in objectives)
+            user_header = f"\u200b{cnt}. <@{upstream_user_id}>, Total Score: {total_score}"
+            objectives_details = "\n".join(f"- ||{obj.objective_text}||, Score: {obj.score}" for obj in objectives)
+            yield f"{user_header}\n{objectives_details}"
 
     def record_response_reaction(
         self,

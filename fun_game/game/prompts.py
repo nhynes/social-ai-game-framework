@@ -112,6 +112,7 @@ def make_game_system_prompt(
     player_inventory: Iterable[str],
     context: Iterable[SimpleMessage],
     custom_rules: Iterable[str] | None = None,
+    objectives: Iterable[str] | None = None,
     sudo: bool = False,
 ) -> str:
     components = [
@@ -127,6 +128,17 @@ def make_game_system_prompt(
             response_guidelines=_format_list(config.response_guidelines),
         )
     ]
+
+    components.append(
+        dedent(
+            f"""
+            PLAYER OBJECTIVES:
+            {"\n".join(objectives)}
+            """
+        )
+        if objectives
+        else ""
+    )
 
     components.append(
         dedent(

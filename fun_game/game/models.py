@@ -75,3 +75,10 @@ class CustomRule:
     id: int
     rule: str
     secret: bool
+
+
+@dataclass
+class Objective:
+    id: int
+    objective_text: str
+    score: int = 0

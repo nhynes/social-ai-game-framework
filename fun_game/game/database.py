@@ -3,7 +3,7 @@ from contextlib import contextmanager
 from typing import Generator
 import time
 
-from .models import CustomRule, Message, MessageStatus, SimpleMessage, User
+from .models import Objective, CustomRule, Message, MessageStatus, SimpleMessage, User
 
 
 class DatabaseConnection:
@@ -138,6 +138,28 @@ class DatabaseConnection:
         self.cursor.execute(
             "UPDATE custom_rules SET removed = 1 WHERE id = ?", (rule_id,)
         )
+
+    def load_objectives(self) -> dict[int, list[Objective]]:
+        self.cursor.execute(
+            """
+            SELECT users.upstream_id, objectives.id, objectives.objective_text, objectives.score
+            FROM objectives JOIN users ON objectives.user_id = users.id
+            """
+        )
+        objectives: dict[int, list[Objective]] = {}
+        for user_upstream_id, objective_id, objective_text, score in self.cursor.fetchall():
+            user_upstream_id = int(user_upstream_id)
+            if user_upstream_id not in objectives:
+                objectives[user_upstream_id] = []
+            objectives[user_upstream_id].append(Objective(id=objective_id, objective_text=objective_text, score=score))
+        return objectives
+
+    def add_objective(self, objective_text: str, user_id: int) -> Objective:
+        self.cursor.execute(
+            "INSERT INTO objectives (objective_text, user_id, score) VALUES (?, ?, ?) RETURNING id",
+            (objective_text, user_id, 0),
+        )
+        return Objective(id=self.cursor.fetchone()["id"], objective_text=objective_text, score=0)
 
     def add_reaction(self, message_id: int, user_id: int | None, reaction: str):
         self.cursor.execute(
@@ -391,5 +413,14 @@ class Database:
                     FOREIGN KEY (creator) REFERENCES users(id)
                 );
                 CREATE INDEX IF NOT EXISTS idx_custom_rules_active ON custom_rules (removed) WHERE removed = 0;
+
+                CREATE TABLE IF NOT EXISTS objectives (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    objective_text TEXT NOT NULL,
+                    user_id INTEGER NOT NULL,
+                    score INTEGER NOT NULL DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id)
+                );
                 """
             )

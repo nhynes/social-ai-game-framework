@@ -47,6 +47,7 @@ class Bot(commands.Bot):
             "frontends.discord.cogs.message_handler",
             "frontends.discord.cogs.sudo_commands",
             "frontends.discord.cogs.show_commands",
+            "frontends.discord.cogs.john_commands",
             "frontends.discord.cogs.reaction_handler",
         ]:
             await self.load_extension(ext)
