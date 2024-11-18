@@ -19,7 +19,7 @@ logger = logging.getLogger("bot")
 
 class Bot(commands.Bot):
     def __init__(
-        self, config: DiscordFrontendConfig, engine_factory: Callable[[str], GameEngine]
+        self, config: DiscordFrontendConfig, engine_factory: Callable[[str, discord.TextChannel | None], GameEngine]
     ) -> None:
         intents = discord.Intents.default()
         intents.message_content = True
@@ -59,10 +59,6 @@ class Bot(commands.Bot):
             await self.on_guild_join(guild)
 
     async def on_guild_join(self, guild):
-        guild_state = GuildState(
-            guild.id, game_engine=self._engine_factory(f"discord_guild_{guild.id}")
-        )
-
         # Look for existing channel
         channel = discord.utils.get(guild.channels, name=self._config.channel_name)
         if not channel:
@@ -80,6 +76,10 @@ class Bot(commands.Bot):
 
         if not isinstance(channel, discord.TextChannel):
             return
-        guild_state.game_channel = channel
+
+        guild_state = GuildState(
+            guild.id, game_engine=self._engine_factory(f"discord_guild_{guild.id}", channel), game_channel=channel
+        )
+
         self.guild_states[guild.id] = guild_state
         logger.info("Initialized guild state for %s (ID: %s)", guild.name, guild.id)

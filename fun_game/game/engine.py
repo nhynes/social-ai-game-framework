@@ -1,4 +1,5 @@
 import logging
+import discord
 from typing import AsyncContextManager, Callable, Iterable
 
 from fun_game.config import GameConfig
@@ -26,11 +27,12 @@ logger.setLevel(logging.DEBUG)
 
 class GameEngine:
     @classmethod
-    def make_factory(cls, config: GameConfig) -> Callable[[str], "GameEngine"]:
-        def _factory(instance_id: str) -> "GameEngine":
+    def make_factory(cls, config: GameConfig) -> Callable[[str, discord.TextChannel], "GameEngine"]:
+        def _factory(instance_id: str, game_channel: discord.TextChannel) -> "GameEngine":
             db = Database(f"data/{instance_id}.sqlite")
             ai = AIProvider.default()
-            return cls(config, instance_id, ai=ai, db=db)
+            game_engine = cls(config, instance_id, ai=ai, db=db, game_channel=game_channel)
+            return game_engine
 
         return _factory
 
@@ -41,10 +43,13 @@ class GameEngine:
         *,
         ai: AIProvider | None = None,
         db: Database | None = None,
+        game_channel: discord.TextChannel,
+        # TODO: game_channel shouldn't be frontend specific
     ):
         self._config = config
         self._ai = ai if ai else AIProvider.default()
         self._db = db if db else Database(f"data/{instance_id}.sqlite")
+        self._game_channel = game_channel
         self._world_state: set[str] = set()
         self._custom_rules: dict[int, CustomRule] = {}
         self._player_inventories: dict[int, set[str]] = {}
@@ -218,15 +223,13 @@ class GameEngine:
                 db.remove_custom_rule(rule_id)
                 del self._custom_rules[rule_id]
 
-    def add_objective(self, objective: str, upstream_user_id: int, user_name: str = "<unknown>") -> int | None:
+    async def add_objective(self, objective: str, user_upstream_id: int, user_name: str = "<unknown>") -> int | None:
         with self._db.connect() as db:
-            user = db.get_or_create_user(upstream_user_id, user_name)
+            user = db.get_or_create_user(user_upstream_id, user_name)
             if not user:
                 return None
             objective_data = db.add_objective(objective, user.id)
-        if upstream_user_id not in self._objectives:
-            self._objectives[upstream_user_id] = []
-        self._objectives[upstream_user_id].append(objective_data)
+        await self._game_channel.send(f"<@{user_upstream_id}> registered an objective!")
         return objective_data.id
 
     def leaderboard(self) -> Iterable[str]:
