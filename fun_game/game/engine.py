@@ -7,6 +7,7 @@ from typing import AsyncContextManager, Callable, Iterable
 from fun_game.config import GameConfig
 from .database import Database, DatabaseConnection
 from .ai import AIProvider
+from .tool_provider import ToolProvider, JohnToolProvider
 from .utils import timer
 from .models import (
     BiddingContext,
@@ -35,7 +36,8 @@ class GameEngine:
         def _factory(instance_id: str, game_channel: discord.TextChannel) -> "GameEngine":
             db = Database(f"data/{instance_id}.sqlite")
             ai = AIProvider.default()
-            game_engine = cls(config, instance_id, ai=ai, db=db, game_channel=game_channel)
+            game_engine = cls(config, instance_id, ai=ai, db=db, tool_provider=None, game_channel=game_channel)
+            game_engine._tool_provider = JohnToolProvider(game_engine)
             return game_engine
 
         return _factory
@@ -47,12 +49,14 @@ class GameEngine:
         *,
         ai: AIProvider | None = None,
         db: Database | None = None,
+        tool_provider: ToolProvider | None = None,
         game_channel: discord.TextChannel,
         # TODO: game_channel shouldn't be frontend specific
     ):
         self._config = config
         self._ai = ai if ai else AIProvider.default()
         self._db = db if db else Database(f"data/{instance_id}.sqlite")
+        self._tool_provider = tool_provider
         self._game_channel = game_channel
         self._world_state: set[str] = set()
         self._custom_rules: dict[int, CustomRule] = {}
@@ -236,7 +240,7 @@ class GameEngine:
             ),
             sudo=sudo,
         )
-        return await self._ai.prompt(message, system_prompt, GameModelResponse)
+        return await self._ai.prompt(message, system_prompt, GameModelResponse, tool_provider=self._tool_provider)
 
     def add_custom_rule(self, rule: str, creator_id: int, secret: bool) -> int | None:
         with self._db.connect() as db:

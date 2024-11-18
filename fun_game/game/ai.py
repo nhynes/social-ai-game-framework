@@ -1,13 +1,15 @@
 from abc import ABC, abstractmethod
 import logging
 import os
-from typing import Type, Union
+from typing import Type, Union, Iterable
 
 from anthropic import AsyncAnthropic
 import anthropic.types
 from openai import AsyncOpenAI
 import openai.types.chat
 from pydantic import BaseModel
+
+from .tool_provider import ToolProvider
 
 logger = logging.getLogger("game.ai")
 logger.setLevel(logging.DEBUG)
@@ -28,7 +30,7 @@ class AIProvider(ABC):
         pass
 
     @abstractmethod
-    async def prompt[T: BaseModel](self, user: str, system: str, model: Type[T]) -> T:
+    async def prompt[T: BaseModel](self, user: str, system: str, model: Type[T], tool_provider: ToolProvider | None = None) -> T:
         pass
 
 
@@ -51,13 +53,57 @@ class DefaultAIProvider(AIProvider):
         )
         return parse_ai_response(response, model)
 
-    async def prompt[T: BaseModel](self, user: str, system: str, model: Type[T]) -> T:
+    async def prompt[T: BaseModel](self, user: str, system: str, model: Type[T], tool_provider: ToolProvider | None = None) -> T:
+        if not tool_provider:
+            response = await self.anthropic.messages.create(
+                model="claude-3-5-sonnet-latest",
+                max_tokens=8000,
+                system=system,
+                messages=[{"role": "user", "content": user}],
+            )
+            return parse_ai_response(response, model)
+
+        messages: Iterable[anthropic.types.MessageParam] = [{"role": "user", "content": user}]
         response = await self.anthropic.messages.create(
             model="claude-3-5-sonnet-latest",
             max_tokens=8000,
             system=system,
-            messages=[{"role": "user", "content": user}],
+            tools=tool_provider.tools,
+            messages=messages,
+            tool_choice={"type": "auto", "disable_parallel_tool_use": True},
         )
+
+        tool_use = next((block for block in response.content if block.type == "tool_use"), None)
+        while tool_use:
+            tool_name = tool_use.name
+            tool_input = tool_use.input
+
+            tool_result = tool_provider.process_tool(tool_name, tool_input)
+
+            messages.extend([
+                {
+                    "role": "assistant",
+                    "content": [tool_use],
+                }, # discard chain of thought and only keep tool invocation
+                {
+                    "role": "user",
+                    "content": [{
+                        "type": "tool_result",
+                        "tool_use_id": tool_use.id,
+                        "content": str(tool_result),
+                    }],
+                },
+            ])
+
+            response = await self.anthropic.messages.create(
+                model="claude-3-5-sonnet-latest",
+                max_tokens=8000,
+                system=system,
+                tools=tool_provider.tools,
+                messages=messages
+            )
+            tool_use = next((block for block in response.content if block.type == "tool_use"), None)
+
         return parse_ai_response(response, model)
 
 
