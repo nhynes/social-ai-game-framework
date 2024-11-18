@@ -39,7 +39,7 @@ class ShowCommands(commands.Cog):
             )
             empty_message = "There are no custom rules."
         elif option == Options.inventory:
-            items = guild_state.game_engine.player_inventory(interaction.user.id)
+            items = guild_state.game_engine.player_inventory(user_id=0) # HACK to share inventory
             empty_message = "Your inventory is empty."
         else:
             items = guild_state.game_engine.world_state

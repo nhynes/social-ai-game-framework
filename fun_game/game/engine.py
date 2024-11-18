@@ -91,7 +91,7 @@ class GameEngine:
             game_response = await self._generate_game_response(context, message_data)
             reply_id = self._persist_response(db, context, message_data, game_response)
 
-        self._update_cached_state(game_response, message_data.user.id)
+        self._update_cached_state(game_response, user_id=0) # HACK to share inventory
         return GameResponse(
             response_text=game_response.response, _engine=self, _message_id=reply_id
         )
@@ -109,7 +109,7 @@ class GameEngine:
 
         message_id = self._ensure_message_exists(db, context, user.id, reply_to_message)
         message_context = db.get_message_context(message_id)
-        player_inventory = self._load_player_inventory(user.id, db)
+        player_inventory = self._load_player_inventory(user_id=0, db=db) # HACK to share inventory
 
         return MessageData(user, message, message_id, message_context, player_inventory)
 
@@ -133,7 +133,7 @@ class GameEngine:
         game_response: GameModelResponse,
     ) -> int:
         db.update_game_state(
-            user_id=message_data.user.id,
+            user_id=0, # HACK to share inventory
             world_changes=game_response.world_state_updates,
             inventory_changes=game_response.player_inventory_updates,
             trigger_message_id=context.message_id,
