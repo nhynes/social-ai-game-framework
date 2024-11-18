@@ -14,6 +14,7 @@ class Options(Enum):
     world = "world"
     inventory = "inventory"
     rules = "rules"
+    points = "points"
 
 
 class ShowCommands(commands.Cog):
@@ -27,6 +28,12 @@ class ShowCommands(commands.Cog):
 
         guild_state = self.bot.guild_states.get(interaction.guild.id)
         if not guild_state:
+            return
+
+        if option == Options.points:
+            points = guild_state.game_engine.player_points(interaction.user.id)
+            message = f"You have {points} points available."
+            await interaction.response.send_message(message, ephemeral=True)
             return
 
         items: Iterable[str]

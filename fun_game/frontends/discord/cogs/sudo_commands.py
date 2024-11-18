@@ -20,6 +20,45 @@ class SudoCommands(commands.Cog):
     state_group = app_commands.Group(
         name="state", parent=sudo_group, description="Manage state"
     )
+    bidding_group = app_commands.Group(
+        name="bidding", parent=sudo_group, description="Manage bidding"
+    )
+
+    @bidding_group.command(name="start")
+    async def start_bidding(self, interaction: discord.Interaction):
+        if not interaction.guild:
+            return
+
+        guild_state = self.bot.guild_states.get(interaction.guild.id)
+        if not guild_state:
+            return
+
+        response = guild_state.game_engine.start_bidding()
+        await interaction.response.send_message(response, ephemeral=False)
+
+    @bidding_group.command(name="resolve")
+    async def resolve_bidding(self, interaction: discord.Interaction):
+        if not interaction.guild:
+            return
+
+        guild_state = self.bot.guild_states.get(interaction.guild.id)
+        if not guild_state:
+            return
+
+        response = await guild_state.game_engine.resolve_bidding()
+        await interaction.response.send_message(response, ephemeral=True)
+
+    @bidding_group.command(name="toggle")
+    async def bidding_toggle(self, interaction: discord.Interaction):
+        if not interaction.guild:
+            return
+
+        guild_state = self.bot.guild_states.get(interaction.guild.id)
+        if not guild_state:
+            return
+
+        response = guild_state.game_engine.toggle_bidding()
+        await interaction.response.send_message(response, ephemeral=False)
 
     @rule_group.command(name="show")
     async def show_rules(self, interaction: discord.Interaction):

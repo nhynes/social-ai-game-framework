@@ -58,5 +58,17 @@ class JohnCommands(commands.Cog):
         else:
             await interaction.response.send_message(response, ephemeral=True)
 
+    @app_commands.command(name="bid", description="Bid to take control of John.")
+    async def bid(self, interaction: discord.Interaction, value: int):
+        if not interaction.guild:
+            return
+
+        guild_state = self.bot.guild_states.get(interaction.guild.id)
+        if not guild_state:
+            return
+
+        _, response = await guild_state.game_engine.add_bid(value, interaction.user.id)
+        await interaction.response.send_message(response, ephemeral=True)
+
 async def setup(bot):
     await bot.add_cog(JohnCommands(bot))

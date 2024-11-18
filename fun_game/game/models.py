@@ -1,6 +1,7 @@
 from enum import Enum
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Iterable
+import asyncio
 
 if TYPE_CHECKING:
     from .engine import GameEngine
@@ -82,3 +83,16 @@ class Objective:
     id: int
     objective_text: str
     score: int = 0
+
+
+@dataclass
+class BiddingContext:
+    active_player: int = 0
+    messages_since_last_auction: int = 0
+    bidding_in_progress: bool = False
+    bids: dict[int, int] = field(default_factory=dict)
+    points: dict[int, int] = field(default_factory=dict)
+    timer_task: asyncio.Task | None = None
+    timeout: int = 30
+    starting_points: int = 10
+    disabled: bool = False

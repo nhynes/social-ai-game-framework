@@ -1,12 +1,15 @@
 import logging
 import asyncio
+import random
 import discord
 from typing import AsyncContextManager, Callable, Iterable
 
 from fun_game.config import GameConfig
 from .database import Database, DatabaseConnection
 from .ai import AIProvider
+from .utils import timer
 from .models import (
+    BiddingContext,
     Objective,
     CustomRule,
     GameContext,
@@ -55,6 +58,7 @@ class GameEngine:
         self._custom_rules: dict[int, CustomRule] = {}
         self._player_inventories: dict[int, set[str]] = {}
         self._objectives: dict[int, list[Objective]] = {}
+        self._bidding_context: BiddingContext = BiddingContext()
         self._game_started: bool = False
 
         with self._db.connect() as dbc:
@@ -63,6 +67,8 @@ class GameEngine:
                 self._game_started = True
             self._custom_rules = {rule.id: rule for rule in dbc.load_custom_rules()}
             self._objectives = dbc.load_objectives()
+            for user_upstream_id in self._objectives.keys():
+                self._bidding_context.points[user_upstream_id] = self._bidding_context.starting_points
             self._load_player_inventory(user_id=0, db=dbc)
 
     @property
@@ -78,6 +84,16 @@ class GameEngine:
         context: GameContext,
         contextmanager: Callable[[], AsyncContextManager] | None = None,
     ) -> GameResponse | None:
+        if self._game_started and not self._bidding_context.disabled:
+            if self._bidding_context.bidding_in_progress:
+                return
+            active_player = self._bidding_context.active_player
+            if not active_player:
+                self.start_bidding()
+                return
+            if context.user_id != active_player:
+                return
+
         # Check if message is for the game
         if not context.force_feed:
             if not await self.is_game_action(context.message_content):
@@ -97,6 +113,15 @@ class GameEngine:
             reply_id = self._persist_response(db, context, message_data, game_response)
 
         self._update_cached_state(game_response, user_id=0) # HACK to share inventory
+
+        if not self._bidding_context.disabled:
+            self._bidding_context.messages_since_last_auction += 1
+            msg_cnt = self._bidding_context.messages_since_last_auction
+            if msg_cnt > 4:
+                prob = min(1, (msg_cnt - 4) / 6)
+                if random.random() < prob:
+                    self.start_bidding()
+
         return GameResponse(
             response_text=game_response.response, _engine=self, _message_id=reply_id
         )
@@ -234,6 +259,10 @@ class GameEngine:
             if not user:
                 return None
             objective_data = db.add_objective(objective, user.id)
+        if user_upstream_id not in self._objectives:
+            self._objectives[user_upstream_id] = []
+        self._objectives[user_upstream_id].append(objective_data)
+        self._bidding_context.points[user_upstream_id] = self._bidding_context.starting_points
         await self._game_channel.send(f"<@{user_upstream_id}> registered an objective!")
         return objective_data.id
 
@@ -299,6 +328,105 @@ class GameEngine:
             )
         self._update_cached_state(game_response, user_id=0)
         self._game_started = True
+
+        self._bidding_context.bidding_in_progress = False
+        self.start_bidding(delay=20)
+
+    def start_bidding(self, delay: int = 0) -> str:
+        if self._bidding_context.disabled or self._bidding_context.bidding_in_progress:
+            return "Bidding is disabled or in progress."
+
+        self._bidding_context.bidding_in_progress = True
+        self._bidding_context.active_player = 0
+        self._bidding_context.messages_since_last_auction = 0
+        self._bidding_context.bids.clear()
+        asyncio.create_task(self._delayed_start_bidding(delay))
+        return "Starting bidding auction."
+
+    # add a delay so that LLM message prints first
+    async def _delayed_start_bidding(self, delay: int):
+        if self._bidding_context.disabled:
+            return
+        await asyncio.sleep(delay)
+        self._bidding_context.timer_task=asyncio.create_task(timer(self._bidding_context.timeout, self._last_call_resolve_bidding))
+        await self._game_channel.send(f"Bidding is now open! Use ``/bid`` to place a bid to take control of John.")
+        logger.debug("Bidding started")
+
+    async def add_bid(self, bid_value: int, upstream_user_id: int) -> tuple[bool, str]:
+        if not self._bidding_context.bidding_in_progress:
+                return False, "Bidding is closed."
+
+        if upstream_user_id not in self._bidding_context.points:
+            return False, "You need to register an objective first."
+
+        available_points = self._bidding_context.points[upstream_user_id]
+        if available_points < bid_value:
+            return False, f"You have {available_points} points available."
+
+        if upstream_user_id not in self._bidding_context.bids:
+            await self._game_channel.send(f"<@{upstream_user_id}> submitted a bid!")
+
+        self._bidding_context.bids[upstream_user_id] = bid_value
+
+        if len(self._bidding_context.bids) == len(self._bidding_context.points):
+            if self._bidding_context.timer_task:
+                self._bidding_context.timer_task.cancel()
+            await self.resolve_bidding()
+        elif not self._bidding_context.timer_task or self._bidding_context.timer_task.done():
+            self._bidding_context.timer_task=asyncio.create_task(timer(timeout=0, handler=self._last_call_resolve_bidding))
+        # TODO potential concurrency bugs here
+
+        return True, f"Bid {bid_value} accepted."
+
+    async def _last_call_resolve_bidding(self):
+       if not self._bidding_context.bids:
+           logger.debug("Resolve bidding: no bids")
+           return
+
+       if len(self._bidding_context.bids) < len(self._bidding_context.points):
+           await self._game_channel.send(f"Last call! Bidding closes in 10 seconds.")
+           await asyncio.sleep(10)
+
+       await self.resolve_bidding()
+
+    async def resolve_bidding(self) -> str:
+       if not self._bidding_context.bids:
+           logger.debug("Resolve bidding: no bids")
+           return "No bids."
+
+       max_bid = max(self._bidding_context.bids.values())
+       highest_bidders = [
+            user_name for user_name, bid in self._bidding_context.bids.items()
+            if bid == max_bid
+       ]
+
+       if len(highest_bidders) > 1:
+           winner_upstream_id = random.choice(highest_bidders)
+       else:
+           winner_upstream_id = highest_bidders[0]
+
+       self._bidding_context.points[winner_upstream_id] -= self._bidding_context.bids[winner_upstream_id]
+       self._bidding_context.bids.clear()
+       self._bidding_context.active_player = winner_upstream_id
+       self._bidding_context.bidding_in_progress = False
+
+       await self._game_channel.send(f"<@{winner_upstream_id}> takes control of John!")
+       logger.debug("Bidding resolved")
+       return "Bidding resolved."
+
+    def toggle_bidding(self) -> str:
+        self._bidding_context.disabled = not self._bidding_context.disabled
+        if self._bidding_context.disabled:
+            self._bidding_context.bidding_in_progress = False
+            self._bidding_context.bids.clear()
+            self._bidding_context.active_player = 0
+            return "Bidding disabled."
+        if self._game_started:
+            self.start_bidding()
+        return "Bidding enabled."
+
+    def player_points(self, user_upstream_id: int) -> int:
+        return self._bidding_context.points.get(user_upstream_id, self._bidding_context.starting_points)
 
     def record_response_reaction(
         self,
