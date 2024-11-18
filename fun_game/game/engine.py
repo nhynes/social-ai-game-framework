@@ -1,4 +1,5 @@
 import logging
+import asyncio
 import discord
 from typing import AsyncContextManager, Callable, Iterable
 
@@ -54,11 +55,15 @@ class GameEngine:
         self._custom_rules: dict[int, CustomRule] = {}
         self._player_inventories: dict[int, set[str]] = {}
         self._objectives: dict[int, list[Objective]] = {}
+        self._game_started: bool = False
 
         with self._db.connect() as dbc:
             self._world_state = dbc.load_world_state()
+            if self.world_state:
+                self._game_started = True
             self._custom_rules = {rule.id: rule for rule in dbc.load_custom_rules()}
             self._objectives = dbc.load_objectives()
+            self._load_player_inventory(user_id=0, db=dbc)
 
     @property
     def world_state(self) -> Iterable[str]:
@@ -247,6 +252,53 @@ class GameEngine:
             user_header = f"\u200b{cnt}. <@{upstream_user_id}>, Total Score: {total_score}"
             objectives_details = "\n".join(f"- ||{obj.objective_text}||, Score: {obj.score}" for obj in objectives)
             yield f"{user_header}\n{objectives_details}"
+
+    async def start_game(self) -> tuple[bool, str]:
+        if self._game_started:
+            return False, "Game already in progress."
+        if not self._objectives:
+            return False, "No objectives registered."
+        asyncio.create_task(self._do_start_game())
+        return True, "Starting game."
+
+    async def _do_start_game(self):
+        system_prompt = make_game_system_prompt(
+            config=self._config.engine,
+            world_state=[],
+            player_name="System",
+            player_inventory=[],
+            context=[],
+            custom_rules=(rule.rule for rule in self._custom_rules.values()),
+            objectives = (
+                obj.objective_text
+                for obj_list in self._objectives.values()
+                for obj in obj_list
+            ),
+            sudo=True,
+        )
+        message = """Generate the initial state according to the rules.
+        Describe the state in detail in the response field of the JSON output.
+        """
+
+        async with self._game_channel.typing():
+            game_response = await self._ai.prompt(message, system_prompt, GameModelResponse)
+
+        message = await self._game_channel.send(game_response.response)
+        with self._db.connect() as db:
+            message_id = db.add_message(
+                game_response.response,
+                sender_id=0,
+                upstream_id=None,
+                reply_to_id=None,
+            )
+            db.update_game_state(
+                user_id=0,
+                world_changes=game_response.world_state_updates,
+                inventory_changes=game_response.player_inventory_updates,
+                trigger_message_id=message_id,
+            )
+        self._update_cached_state(game_response, user_id=0)
+        self._game_started = True
 
     def record_response_reaction(
         self,
