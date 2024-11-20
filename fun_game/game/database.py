@@ -7,9 +7,11 @@ from .models import Objective, CustomRule, Message, MessageStatus, SimpleMessage
 
 
 class DatabaseConnection:
-    def __init__(self, conn: sqlite3.Connection):
+    def __init__(self, conn: sqlite3.Connection, db: "Database"):
         self.conn = conn
         self.cursor = conn.cursor()
+        self.db = db
+        self._game_id = db.get_active_game_id()
 
     def get_or_create_user(self, upstream_id: int, display_name: str) -> User:
         self.cursor.execute(
@@ -39,9 +41,13 @@ class DatabaseConnection:
             name=row["username"],
         )
 
-    def add_game(self) -> int | None:
+    def create_game(self) -> int | None:
         self.cursor.execute("INSERT INTO games DEFAULT VALUES")
-        return self.cursor.lastrowid
+        game_id = self.cursor.lastrowid
+        if game_id:
+            self._game_id = game_id
+            self.db.set_active_game_id(game_id)
+        return game_id
 
     def get_last_game_id(self) -> int:
         self.cursor.execute(
@@ -62,7 +68,6 @@ class DatabaseConnection:
 
     def get_message_context(
         self,
-        game_id: int,
         base_message: int,
         size: int = 10,
     ) -> list[SimpleMessage]:
@@ -125,7 +130,7 @@ class DatabaseConnection:
             ORDER BY id;
         """
 
-        params = {"game_id": game_id, "base_msg": base_message, "size": size}
+        params = {"game_id": self._game_id, "base_msg": base_message, "size": size}
 
         self.cursor.execute(query, params)
         rows = self.cursor.fetchall()
@@ -156,14 +161,14 @@ class DatabaseConnection:
             "UPDATE custom_rules SET removed = 1 WHERE id = ?", (rule_id,)
         )
 
-    def load_objectives(self, game_id: int) -> dict[int, list[Objective]]:
+    def load_objectives(self) -> dict[int, list[Objective]]:
         self.cursor.execute(
             """
             SELECT users.upstream_id, objectives.id, objectives.objective_text, objectives.score
             FROM objectives JOIN users ON objectives.user_id = users.id
             WHERE objectives.game_id = ?
             """,
-            (game_id,)
+            (self._game_id,)
         )
         objectives: dict[int, list[Objective]] = {}
         for user_upstream_id, objective_id, objective_text, score in self.cursor.fetchall():
@@ -173,10 +178,10 @@ class DatabaseConnection:
             objectives[user_upstream_id].append(Objective(id=objective_id, objective_text=objective_text, score=score))
         return objectives
 
-    def add_objective(self, objective_text: str, user_id: int, game_id: int) -> Objective:
+    def add_objective(self, objective_text: str, user_id: int) -> Objective:
         self.cursor.execute(
             "INSERT INTO objectives (objective_text, user_id, score, game_id) VALUES (?, ?, ?, ?) RETURNING id",
-            (objective_text, user_id, 0, game_id),
+            (objective_text, user_id, 0, self._game_id),
         )
         return Objective(id=self.cursor.fetchone()["id"], objective_text=objective_text, score=0)
 
@@ -196,7 +201,6 @@ class DatabaseConnection:
         self,
         content: str,
         sender_id: int,
-        game_id: int,
         upstream_id: int | None = None,
         reply_to_id: int | None = None,
         filtered: bool | None = False,
@@ -210,7 +214,7 @@ class DatabaseConnection:
                 upstream_id,
                 reply_to_id,
                 MessageStatus.FILTERED.value if filtered else None,
-                game_id,
+                self._game_id,
             ),
         )
         assert self.cursor.lastrowid
@@ -258,7 +262,6 @@ class DatabaseConnection:
     def update_game_state(
         self,
         user_id: int,
-        game_id: int,
         world_changes: dict[str, bool] | None,
         inventory_changes: dict[str, bool] | None,
         trigger_message_id: int | None,  # pylint: disable=unused-argument
@@ -272,7 +275,7 @@ class DatabaseConnection:
                 if should_add:
                     self.cursor.execute(
                         "INSERT OR IGNORE INTO world_state (item_id, game_id) VALUES (?, ?)",
-                        (item_id, game_id,),
+                        (item_id, self._game_id,),
                     )
                 else:
                     self.cursor.execute(
@@ -286,7 +289,7 @@ class DatabaseConnection:
                 if should_add:
                     self.cursor.execute(
                         "INSERT OR IGNORE INTO player_inventories (user_id, item_id, game_id) VALUES (?, ?, ?)",
-                        (user_id, item_id, game_id),
+                        (user_id, item_id, self._game_id),
                     )
                 else:
                     self.cursor.execute(
@@ -294,7 +297,7 @@ class DatabaseConnection:
                         (user_id, item_id),
                     )
 
-    def load_world_state(self, game_id: int) -> set[str]:
+    def load_world_state(self) -> set[str]:
         self.cursor.execute(
             """
             SELECT i.name
@@ -302,11 +305,11 @@ class DatabaseConnection:
             JOIN items i ON ws.item_id = i.id
             WHERE ws.game_id = ?
         """,
-        (game_id,)
+        (self._game_id,)
         )
         return {row["name"] for row in self.cursor.fetchall()}
 
-    def load_player_inventory(self, user_id: int, game_id: int) -> set[str]:
+    def load_player_inventory(self, user_id: int) -> set[str]:
         self.cursor.execute(
             """
             SELECT i.name
@@ -314,7 +317,7 @@ class DatabaseConnection:
             JOIN items i ON pi.item_id = i.id
             WHERE pi.user_id = ? AND pi.game_id = ?
         """,
-            (user_id, game_id,),
+            (user_id, self._game_id,),
         )
         return {row["name"] for row in self.cursor.fetchall()}
 
@@ -323,7 +326,10 @@ class DatabaseConnection:
 class Database:
     def __init__(self, db_path: str):
         self.db_path = db_path
+        self._active_game_id = None
         self._init_db()
+        with self.connect() as db:
+            self._active_game_id = db.get_last_game_id()
         self.version = self._get_version()
         self._migrate()
 
@@ -335,6 +341,12 @@ class Database:
     def _migrate(self):
         pass
 
+    def set_active_game_id(self, game_id):
+        self._active_game_id = game_id
+
+    def get_active_game_id(self):
+        return self._active_game_id
+
     @contextmanager
     def connect(
         self, max_retries: int = 5, retry_delay: float = 0.1
@@ -344,7 +356,7 @@ class Database:
             try:
                 conn = sqlite3.connect(self.db_path)
                 conn.row_factory = sqlite3.Row
-                db_conn = DatabaseConnection(conn)
+                db_conn = DatabaseConnection(conn, self)
                 conn.execute("BEGIN TRANSACTION")
                 yield db_conn
                 conn.commit()

@@ -63,15 +63,13 @@ class GameEngine:
         self._objectives: dict[int, list[Objective]] = {}
         self._bidding_context: BiddingContext = BiddingContext()
         self._game_started: bool = False
-        self._game_id: int = 1
 
         with self._db.connect() as dbc:
-            self._game_id = dbc.get_last_game_id()
-            self._world_state = dbc.load_world_state(self._game_id)
+            self._world_state = dbc.load_world_state()
             if self.world_state:
                 self._game_started = True
             self._custom_rules = {rule.id: rule for rule in dbc.load_custom_rules()}
-            self._objectives = dbc.load_objectives(self._game_id)
+            self._objectives = dbc.load_objectives()
             for user_upstream_id in self._objectives.keys():
                 self._bidding_context.points[user_upstream_id] = self._bidding_context.starting_points
             self._load_player_inventory(user_id=0, db=dbc)
@@ -143,7 +141,7 @@ class GameEngine:
         )
 
         message_id = self._ensure_message_exists(db, context, user.id, reply_to_message)
-        message_context = db.get_message_context(self._game_id, message_id)
+        message_context = db.get_message_context(message_id)
         player_inventory = self._load_player_inventory(user_id=0, db=db) # HACK to share inventory
 
         return MessageData(user, message, message_id, message_context, player_inventory)
@@ -169,7 +167,6 @@ class GameEngine:
     ) -> int:
         db.update_game_state(
             user_id=0, # HACK to share inventory
-            game_id=self._game_id,
             world_changes=game_response.world_state_updates,
             inventory_changes=game_response.player_inventory_updates,
             trigger_message_id=context.message_id,
@@ -177,7 +174,6 @@ class GameEngine:
         return db.add_message(
             game_response.response,
             sender_id=0,
-            game_id=self._game_id,
             upstream_id=None,
             reply_to_id=message_data.message_id,
         )
@@ -199,7 +195,6 @@ class GameEngine:
         return db.add_message(
             context.message_content,
             sender_id=user_id,
-            game_id=self._game_id,
             upstream_id=context.message_id,
             reply_to_id=reply_to_id,
         )
@@ -266,7 +261,7 @@ class GameEngine:
             user = db.get_or_create_user(user_upstream_id, user_name)
             if not user:
                 return None
-            objective_data = db.add_objective(objective, user.id, self._game_id)
+            objective_data = db.add_objective(objective, user.id)
         if user_upstream_id not in self._objectives:
             self._objectives[user_upstream_id] = []
         self._objectives[user_upstream_id].append(objective_data)
@@ -293,10 +288,9 @@ class GameEngine:
 
     def clear_game(self) -> tuple[bool,str]:
         with self._db.connect() as db:
-            game_id = db.add_game()
+            game_id = db.create_game()
             if not game_id:
                 return False, "Failed to create new game."
-            self._game_id = game_id
             self._clear_cache()
             self._load_player_inventory(user_id=0, db=db)
         return True, "Game cleared."
@@ -346,13 +340,11 @@ class GameEngine:
             message_id = db.add_message(
                 game_response.response,
                 sender_id=0,
-                game_id=self._game_id,
                 upstream_id=None,
                 reply_to_id=None,
             )
             db.update_game_state(
                 user_id=0,
-                game_id=self._game_id,
                 world_changes=game_response.world_state_updates,
                 inventory_changes=game_response.player_inventory_updates,
                 trigger_message_id=message_id,
@@ -501,7 +493,7 @@ class GameEngine:
     ) -> Iterable[str]:
         player_inventory = self._player_inventories.get(user_id)
         if player_inventory is None:
-            self._player_inventories[user_id] = db.load_player_inventory(user_id, self._game_id)
+            self._player_inventories[user_id] = db.load_player_inventory(user_id)
         return self._player_inventories[user_id]
 
     def _update_cached_state(self, game_response, user_id):
