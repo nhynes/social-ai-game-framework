@@ -18,3 +18,13 @@ It will also need to be able to manage channels, expressions, messages, threads,
 3. Create a config file. The one in `configs/example.toml` is a good starting point.
 
 4. `poetry run python fun_game/main.py --config <path/to/your_config.toml>`
+
+---
+
+## TODO
+
+- [ ] Refactor bidding into BiddingManager
+- [ ] Improve JSON outputs
+- [ ] Add optional seed param to start command
+- [ ] Add score counting
+- [ ] Refactor shared inventory
