@@ -43,21 +43,6 @@ class JohnCommands(commands.Cog):
         for reply in replies:
             await interaction.response.send_message(reply, ephemeral=False)
 
-    @app_commands.command(name="start", description="Start the game")
-    async def start(self, interaction: discord.Interaction):
-        if not interaction.guild:
-            return
-
-        guild_state = self.bot.guild_states.get(interaction.guild.id)
-        if not guild_state:
-            return
-
-        success, response = await guild_state.game_engine.start_game()
-        if success:
-            await interaction.response.send_message("Waking up John...", ephemeral=False)
-        else:
-            await interaction.response.send_message(response, ephemeral=True)
-
     @app_commands.command(name="bid", description="Bid to take control of John.")
     async def bid(self, interaction: discord.Interaction, value: int):
         if not interaction.guild:

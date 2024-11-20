@@ -23,6 +23,36 @@ class SudoCommands(commands.Cog):
     bidding_group = app_commands.Group(
         name="bidding", parent=sudo_group, description="Manage bidding"
     )
+    game_group = app_commands.Group(
+        name="game", parent=sudo_group, description="Manage game"
+    )
+
+    @game_group.command(name="clear")
+    async def clear_game(self, interaction: discord.Interaction):
+        if not interaction.guild:
+            return
+
+        guild_state = self.bot.guild_states.get(interaction.guild.id)
+        if not guild_state:
+            return
+
+        success, response = guild_state.game_engine.clear_game()
+        await interaction.response.send_message(response, ephemeral=not success)
+
+    @game_group.command(name="start")
+    async def start_game(self, interaction: discord.Interaction):
+        if not interaction.guild:
+            return
+
+        guild_state = self.bot.guild_states.get(interaction.guild.id)
+        if not guild_state:
+            return
+
+        success, response = await guild_state.game_engine.start_game()
+        if success:
+            await interaction.response.send_message("Waking up John...", ephemeral=False)
+        else:
+            await interaction.response.send_message(response, ephemeral=True)
 
     @bidding_group.command(name="start")
     async def start_bidding(self, interaction: discord.Interaction):

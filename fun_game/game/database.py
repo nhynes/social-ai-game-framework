@@ -39,6 +39,20 @@ class DatabaseConnection:
             name=row["username"],
         )
 
+    def add_game(self) -> int | None:
+        self.cursor.execute("INSERT INTO games DEFAULT VALUES")
+        return self.cursor.lastrowid
+
+    def get_last_game_id(self) -> int:
+        self.cursor.execute(
+            """
+            SELECT id FROM games
+            ORDER BY id DESC
+            LIMIT 1
+            """
+        )
+        return self.cursor.fetchone()[0]
+
     def get_or_create_item(self, item_name: str) -> int:
         self.cursor.execute(
             "INSERT OR IGNORE INTO items (name) VALUES (?)", (item_name,)
@@ -48,6 +62,7 @@ class DatabaseConnection:
 
     def get_message_context(
         self,
+        game_id: int,
         base_message: int,
         size: int = 10,
     ) -> list[SimpleMessage]:
@@ -64,7 +79,7 @@ class DatabaseConnection:
                 SELECT m.id, m.sender_id, m.content, u.username as sender
                 FROM messages m
                 JOIN users u ON m.sender_id = u.id
-                WHERE m.id <= :base_msg
+                WHERE m.id <= :base_msg AND m.game_id =:game_id
                 ORDER BY m.id DESC
                 LIMIT :size
             ),
@@ -73,8 +88,8 @@ class DatabaseConnection:
                 SELECT m.id, m.sender_id, m.content, m.reply_to_id, u.username as sender
                 FROM messages m
                 JOIN users u ON m.sender_id = u.id
-                WHERE m.id IN (SELECT id FROM previous_messages)
-                OR m.id = :base_msg
+                WHERE (m.id IN (SELECT id FROM previous_messages) OR m.id = :base_msg)
+                AND m.game_id = :game_id
 
                 UNION
 
@@ -82,6 +97,7 @@ class DatabaseConnection:
                 FROM messages m
                 JOIN users u ON m.sender_id = u.id
                 JOIN reply_chain rc ON m.id = rc.reply_to_id
+                WHERE m.game_id = :game_id
             ),
 
             reply_context AS (
@@ -92,6 +108,7 @@ class DatabaseConnection:
                 WHERE m.id <= rc.id
                 AND m.id >= rc.id - :size
                 AND m.id NOT IN (SELECT id FROM reply_chain)
+                AND m.game_id = :game_id
             ),
 
             combined_context AS (
@@ -108,7 +125,7 @@ class DatabaseConnection:
             ORDER BY id;
         """
 
-        params = {"base_msg": base_message, "size": size}
+        params = {"game_id": game_id, "base_msg": base_message, "size": size}
 
         self.cursor.execute(query, params)
         rows = self.cursor.fetchall()
@@ -139,12 +156,14 @@ class DatabaseConnection:
             "UPDATE custom_rules SET removed = 1 WHERE id = ?", (rule_id,)
         )
 
-    def load_objectives(self) -> dict[int, list[Objective]]:
+    def load_objectives(self, game_id: int) -> dict[int, list[Objective]]:
         self.cursor.execute(
             """
             SELECT users.upstream_id, objectives.id, objectives.objective_text, objectives.score
             FROM objectives JOIN users ON objectives.user_id = users.id
-            """
+            WHERE objectives.game_id = ?
+            """,
+            (game_id,)
         )
         objectives: dict[int, list[Objective]] = {}
         for user_upstream_id, objective_id, objective_text, score in self.cursor.fetchall():
@@ -154,10 +173,10 @@ class DatabaseConnection:
             objectives[user_upstream_id].append(Objective(id=objective_id, objective_text=objective_text, score=score))
         return objectives
 
-    def add_objective(self, objective_text: str, user_id: int) -> Objective:
+    def add_objective(self, objective_text: str, user_id: int, game_id: int) -> Objective:
         self.cursor.execute(
-            "INSERT INTO objectives (objective_text, user_id, score) VALUES (?, ?, ?) RETURNING id",
-            (objective_text, user_id, 0),
+            "INSERT INTO objectives (objective_text, user_id, score, game_id) VALUES (?, ?, ?, ?) RETURNING id",
+            (objective_text, user_id, 0, game_id),
         )
         return Objective(id=self.cursor.fetchone()["id"], objective_text=objective_text, score=0)
 
@@ -177,19 +196,21 @@ class DatabaseConnection:
         self,
         content: str,
         sender_id: int,
+        game_id: int,
         upstream_id: int | None = None,
         reply_to_id: int | None = None,
         filtered: bool | None = False,
     ) -> int:
         self.cursor.execute(
-            """INSERT INTO messages (content, sender_id, upstream_id, reply_to_id, status)
-               VALUES (?, ?, ?, ?, ?)""",
+            """INSERT INTO messages (content, sender_id, upstream_id, reply_to_id, status, game_id)
+               VALUES (?, ?, ?, ?, ?, ?)""",
             (
                 content,
                 sender_id,
                 upstream_id,
                 reply_to_id,
                 MessageStatus.FILTERED.value if filtered else None,
+                game_id,
             ),
         )
         assert self.cursor.lastrowid
@@ -237,6 +258,7 @@ class DatabaseConnection:
     def update_game_state(
         self,
         user_id: int,
+        game_id: int,
         world_changes: dict[str, bool] | None,
         inventory_changes: dict[str, bool] | None,
         trigger_message_id: int | None,  # pylint: disable=unused-argument
@@ -249,8 +271,8 @@ class DatabaseConnection:
                 item_id = self.get_or_create_item(item_name)
                 if should_add:
                     self.cursor.execute(
-                        "INSERT OR IGNORE INTO world_state (item_id) VALUES (?)",
-                        (item_id,),
+                        "INSERT OR IGNORE INTO world_state (item_id, game_id) VALUES (?, ?)",
+                        (item_id, game_id,),
                     )
                 else:
                     self.cursor.execute(
@@ -263,8 +285,8 @@ class DatabaseConnection:
                 item_id = self.get_or_create_item(item_name)
                 if should_add:
                     self.cursor.execute(
-                        "INSERT OR IGNORE INTO player_inventories (user_id, item_id) VALUES (?, ?)",
-                        (user_id, item_id),
+                        "INSERT OR IGNORE INTO player_inventories (user_id, item_id, game_id) VALUES (?, ?, ?)",
+                        (user_id, item_id, game_id),
                     )
                 else:
                     self.cursor.execute(
@@ -272,25 +294,27 @@ class DatabaseConnection:
                         (user_id, item_id),
                     )
 
-    def load_world_state(self) -> set[str]:
+    def load_world_state(self, game_id: int) -> set[str]:
         self.cursor.execute(
             """
             SELECT i.name
             FROM world_state ws
             JOIN items i ON ws.item_id = i.id
-        """
+            WHERE ws.game_id = ?
+        """,
+        (game_id,)
         )
         return {row["name"] for row in self.cursor.fetchall()}
 
-    def load_player_inventory(self, user_id: int) -> set[str]:
+    def load_player_inventory(self, user_id: int, game_id: int) -> set[str]:
         self.cursor.execute(
             """
             SELECT i.name
             FROM player_inventories pi
             JOIN items i ON pi.item_id = i.id
-            WHERE pi.user_id = ?
+            WHERE pi.user_id = ? AND pi.game_id = ?
         """,
-            (user_id,),
+            (user_id, game_id,),
         )
         return {row["name"] for row in self.cursor.fetchall()}
 
@@ -358,6 +382,12 @@ class Database:
 
                 INSERT OR IGNORE INTO users (id, username, upstream_id) VALUES (0, 'System', 0);
 
+                CREATE TABLE IF NOT EXISTS games (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                INSERT OR IGNORE INTO games (id) VALUES (1);
+
                 CREATE TABLE IF NOT EXISTS items (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT UNIQUE NOT NULL,
@@ -368,16 +398,20 @@ class Database:
                 CREATE TABLE IF NOT EXISTS world_state (
                     item_id INTEGER PRIMARY KEY,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (item_id) REFERENCES items (id)
+                    game_id INTEGER NOT NULL,
+                    FOREIGN KEY (item_id) REFERENCES items (id),
+                    FOREIGN KEY (game_id) REFERENCES games (id)
                 );
 
                 CREATE TABLE IF NOT EXISTS player_inventories (
                     user_id INTEGER,
                     item_id INTEGER,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    game_id INTEGER NOT NULL,
                     PRIMARY KEY (user_id, item_id),
                     FOREIGN KEY (user_id) REFERENCES users (id),
-                    FOREIGN KEY (item_id) REFERENCES items (id)
+                    FOREIGN KEY (item_id) REFERENCES items (id),
+                    FOREIGN KEY (game_id) REFERENCES games (id)
                 );
 
                 CREATE TABLE IF NOT EXISTS messages (
@@ -387,9 +421,11 @@ class Database:
                     content TEXT NOT NULL,
                     reply_to_id INTEGER,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    game_id INTEGER NOT NULL,
                     status TEXT,
                     FOREIGN KEY (sender_id) REFERENCES users(id),
-                    FOREIGN KEY (reply_to_id) REFERENCES messages(id)
+                    FOREIGN KEY (reply_to_id) REFERENCES messages(id),
+                    FOREIGN KEY (game_id) REFERENCES games (id)
                 );
                 CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_upstream_id ON messages(upstream_id);
 
@@ -420,7 +456,9 @@ class Database:
                     user_id INTEGER NOT NULL,
                     score INTEGER NOT NULL DEFAULT 0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES users(id)
+                    game_id INTEGER NOT NULL,
+                    FOREIGN KEY (user_id) REFERENCES users(id),
+                    FOREIGN KEY (game_id) REFERENCES games (id)
                 );
                 """
             )
