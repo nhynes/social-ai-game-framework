@@ -43,7 +43,7 @@ class JohnCommands(commands.Cog):
         for reply in replies:
             await interaction.response.send_message(reply, ephemeral=False)
 
-    @app_commands.command(name="bid", description="Bid to take control of John.")
+    @app_commands.command(name="bid", description="Bid to take control of John")
     async def bid(self, interaction: discord.Interaction, value: int):
         if not interaction.guild:
             return

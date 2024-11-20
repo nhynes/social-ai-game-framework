@@ -27,7 +27,7 @@ class SudoCommands(commands.Cog):
         name="game", parent=sudo_group, description="Manage game"
     )
 
-    @game_group.command(name="clear")
+    @game_group.command(name="clear", description="Reset game state")
     async def clear_game(self, interaction: discord.Interaction):
         if not interaction.guild:
             return
@@ -39,7 +39,7 @@ class SudoCommands(commands.Cog):
         success, response = guild_state.game_engine.clear_game()
         await interaction.response.send_message(response, ephemeral=not success)
 
-    @game_group.command(name="start")
+    @game_group.command(name="start", description="Start game")
     async def start_game(self, interaction: discord.Interaction):
         if not interaction.guild:
             return
@@ -54,7 +54,7 @@ class SudoCommands(commands.Cog):
         else:
             await interaction.response.send_message(response, ephemeral=True)
 
-    @bidding_group.command(name="start")
+    @bidding_group.command(name="start", description="Start bidding auction")
     async def start_bidding(self, interaction: discord.Interaction):
         if not interaction.guild:
             return
@@ -66,7 +66,7 @@ class SudoCommands(commands.Cog):
         response = guild_state.game_engine.start_bidding()
         await interaction.response.send_message(response, ephemeral=False)
 
-    @bidding_group.command(name="resolve")
+    @bidding_group.command(name="resolve", description="Resolve bidding auction")
     async def resolve_bidding(self, interaction: discord.Interaction):
         if not interaction.guild:
             return
@@ -78,7 +78,7 @@ class SudoCommands(commands.Cog):
         response = await guild_state.game_engine.resolve_bidding()
         await interaction.response.send_message(response, ephemeral=True)
 
-    @bidding_group.command(name="toggle")
+    @bidding_group.command(name="toggle", description="Enable or disable bidding")
     async def bidding_toggle(self, interaction: discord.Interaction):
         if not interaction.guild:
             return
