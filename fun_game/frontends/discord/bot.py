@@ -9,6 +9,8 @@ from discord.ext import commands
 
 from fun_game.config import DiscordFrontendConfig
 from fun_game.game.engine import GameEngine
+from fun_game.game.game_channel import GameChannel
+from .discord_game_channel import DiscordGameChannel
 
 from .guild_state import GuildState
 
@@ -19,7 +21,7 @@ logger = logging.getLogger("bot")
 
 class Bot(commands.Bot):
     def __init__(
-        self, config: DiscordFrontendConfig, engine_factory: Callable[[str, discord.TextChannel | None], GameEngine]
+        self, config: DiscordFrontendConfig, engine_factory: Callable[[str, GameChannel], GameEngine]
     ) -> None:
         intents = discord.Intents.default()
         intents.message_content = True
@@ -78,7 +80,9 @@ class Bot(commands.Bot):
             return
 
         guild_state = GuildState(
-            guild.id, game_engine=self._engine_factory(f"discord_guild_{guild.id}", channel), game_channel=channel
+            guild.id,
+            game_engine=self._engine_factory(f"discord_guild_{guild.id}", DiscordGameChannel(channel)),
+            game_channel=channel
         )
 
         self.guild_states[guild.id] = guild_state

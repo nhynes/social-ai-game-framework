@@ -1,12 +1,12 @@
 import logging
 import asyncio
 import random
-import discord
 from typing import AsyncContextManager, Callable, Iterable
 
 from fun_game.config import GameConfig
 from .database import Database, DatabaseConnection
 from .ai import AIProvider
+from .game_channel import GameChannel
 from .tool_provider import ToolProvider, JohnToolProvider
 from .utils import timer
 from .models import (
@@ -32,8 +32,8 @@ logger.setLevel(logging.DEBUG)
 
 class GameEngine:
     @classmethod
-    def make_factory(cls, config: GameConfig) -> Callable[[str, discord.TextChannel], "GameEngine"]:
-        def _factory(instance_id: str, game_channel: discord.TextChannel) -> "GameEngine":
+    def make_factory(cls, config: GameConfig) -> Callable[[str, GameChannel], "GameEngine"]:
+        def _factory(instance_id: str, game_channel: GameChannel) -> "GameEngine":
             db = Database(f"data/{instance_id}.sqlite")
             ai = AIProvider.default()
             game_engine = cls(config, instance_id, ai=ai, db=db, tool_provider=None, game_channel=game_channel)
@@ -50,14 +50,13 @@ class GameEngine:
         ai: AIProvider | None = None,
         db: Database | None = None,
         tool_provider: ToolProvider | None = None,
-        game_channel: discord.TextChannel,
-        # TODO: game_channel shouldn't be frontend specific
+        game_channel: GameChannel | None = None,
     ):
         self._config = config
         self._ai = ai if ai else AIProvider.default()
         self._db = db if db else Database(f"data/{instance_id}.sqlite")
         self._tool_provider = tool_provider
-        self._game_channel = game_channel
+        self._game_channel = game_channel if game_channel else GameChannel.default()
         self._world_state: set[str] = set()
         self._custom_rules: dict[int, CustomRule] = {}
         self._player_inventories: dict[int, set[str]] = {}
