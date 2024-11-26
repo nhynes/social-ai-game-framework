@@ -328,12 +328,10 @@ class GameEngine:
             ),
             sudo=True,
         )
-        message = """Generate the initial state according to the rules.
-        Describe the state in detail in the response field of the JSON output.
-        """
+        message = "Generate the initial state according to the rules."
 
         async with self._game_channel.typing():
-            game_response = await self._ai.prompt(message, system_prompt, GameModelResponse)
+            game_response = await self._ai.prompt(message, system_prompt, GameModelResponse, self._tool_provider)
 
         message = await self._game_channel.send(game_response.response)
         with self._db.connect() as db:

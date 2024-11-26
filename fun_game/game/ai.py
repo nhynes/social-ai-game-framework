@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 import logging
 import os
-from typing import Type, Union, Iterable
+from typing import Type, Union, Iterable, get_args
 
 from anthropic import AsyncAnthropic
 import anthropic.types
@@ -70,13 +70,23 @@ class DefaultAIProvider(AIProvider):
             system=system,
             tools=tool_provider.tools,
             messages=messages,
-            tool_choice={"type": "auto", "disable_parallel_tool_use": True},
+            tool_choice=tool_provider.tool_choice,
         )
 
         tool_use = next((block for block in response.content if block.type == "tool_use"), None)
         while tool_use:
             tool_name = tool_use.name
             tool_input = tool_use.input
+
+            if not isinstance(tool_input, dict):
+                raise TypeError("Expected tool_input to be a dictionary, but got: {}".format(type(tool_input)))
+
+            if tool_name == "respond":
+                for field_name, field_info in model.model_fields.items():
+                    if field_name not in tool_input or tool_input[field_name] == "null":
+                        if type(None) in get_args(field_info.annotation):
+                            tool_input[field_name] = None
+                return model.model_validate(tool_input)
 
             tool_result = tool_provider.process_tool(tool_name, tool_input)
 
@@ -90,7 +100,7 @@ class DefaultAIProvider(AIProvider):
                     "content": [{
                         "type": "tool_result",
                         "tool_use_id": tool_use.id,
-                        "content": str(tool_result),
+                        "content": tool_result,
                     }],
                 },
             ])
@@ -100,7 +110,8 @@ class DefaultAIProvider(AIProvider):
                 max_tokens=8000,
                 system=system,
                 tools=tool_provider.tools,
-                messages=messages
+                messages=messages,
+                tool_choice=tool_provider.tool_choice,
             )
             tool_use = next((block for block in response.content if block.type == "tool_use"), None)
 
