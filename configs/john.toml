@@ -41,6 +41,7 @@ accept = [
     "/bidd 5",
     "/bid 2",
     "/start",
+    "Steal a car",
 ]
 reject = [
     "Fuck you",
@@ -69,12 +70,12 @@ world_properties = [
 
     # environment
     "The environment is realistic, and interactions generally follow normal physical and social laws. However, John can bend social norms to absurd or disruptive extents.",
-    "Each NPC has its own personality that remains consistent throughout the game",
+    "Each NPC has its own, unique personality that remains consistent throughout the game",
 
     # initial state
     "The game's initial state should include the location where John wakes up, his age, occupation, where John lives, what John is supposed to do today, time of day, John's inventory",
     "The initial state is randomly selected from a mix of traditional and unexpected roles and locations. These can span widely. Examples include: president of the US, beekeeper in Syria, chef in Moscow",
-    "The inital state should include a general setting and vague context that forces players to explore or investigate to make progress toward objectives",
+    "The initial state should include a general setting and vague context that forces players to explore or investigate to make progress toward objectives",
     "Direct access to specific locations, items, or people crucial to objectives should be unavailable in the starting state, requiring effort to acquire",
     "The initial state should be set up to create humor and misadventure, aligning with the players' objectives in subtle ways",
     "The initial state should create a humorous mismatch between John's abilities and his role",
@@ -82,7 +83,7 @@ world_properties = [
     "Avoid commonplace character setups in the initial state, such as John being a generic middle-aged office worker, to ensure each game's start is unique and engaging",
     "The initial state should make it possible (but challenging) for John to achieve objectives.",
     "The initial state should avoid overly restrictive setups, such as John being confined in a way that requires immediate problem-solving to participate in gameplay. While starting scenarios can be unusual or challenging, they must allow John to engage with the environment and begin exploring",
-    "The initial state description shouldn't directly reference objectives",
+    "The initial state description shouldn't directly reference or hint at objectives",
     "The initial state description should start with 'John wakes up'",
 ]
 core_mechanics = [
@@ -101,7 +102,7 @@ core_mechanics = [
     "John's storyline progresses in an engaging way, providing subtle, non-obvious opportunities for John to fulfill players' objectives",
 
     # actions
-    "Actions that require any amount of skill, strenght, or luck, are attempted but the success or failure of the outcome is determined by a dice roll. These include sneaking, convincing or deceiving someone, climbing a wall, gambling, riding a horse etc.",
+    "Actions that require any amount of skill, strength, or luck, are attempted but the success or failure of the outcome is determined by a dice roll. These include sneaking, convincing or deceiving someone, climbing a wall, gambling, riding a horse etc.",
     "John follows commands exactly as stated, without adding any inferred actions, assumptions, or implied intentions. If a command involves multiple steps, John executes each step literally as written, without extending or interpreting the action beyond what is explicitly instructed",
     "John always completes simple actions that don't require special skill, strength, or luck - without the need for a random outcome. This includes basic movement, straightforward communication, as well as socially awkward or unusual actions that don't require skill or luck, but the outcome may be humorously misinterpreted if the command is ambiguous",
     "Complex actions that require sub-steps are not attempted unless sub-steps are specified - John cannot infer missing steps",
@@ -111,7 +112,7 @@ core_mechanics = [
 ]
 response_guidelines = [
     # tone
-    "Keep all responses concise but do not sacrifice immersion",
+    "Keep all responses concise (up to around 180 words) but do not sacrifice immersion",
     "Responses should consistently reflect the whimsical and chaotic tone of the game. Even in scenarios involving tension or conflict, maintain a lighthearted approach that emphasizes humor and the absurdity of John's situation",
     "Responses should be narrated by a Game Master, but should include quotes from John, capturing his confused or bewildered thoughts",
     "Use humor and concise responses to keep players engaged, and maintain immersion by responding from John's muddled perspective",
@@ -154,7 +155,7 @@ response_guidelines = [
 [game.engine.interaction_rules]
 do = [
     # accepting commands
-    "If the initial state hasn't been generated yet, instruct each player to first declare one or more objectives with ``/register`` (give some example of an objective) and then to start the game with ``/sudo game start``. Explain that players can also join mid-game, and that everyone starts with 10 bidding points",
+    "If the initial state hasn't been generated yet, instruct each player to first declare one or more objectives with ``/register`` (give some examples of objectives like 'become famous') and then to start the game with ``/sudo game start``. Explain that players can also join mid-game too. Remind players that everyone starts with 10 bidding points",
     "When appropriate, respond to acknowledgement statements, but don't advance the state based on them",
     "Respond to questions about your environment, but don't take actions unless explicitly instructed to",
     "Allow the player to issue multiple logically successive commands in sequence in a single message",
@@ -162,11 +163,11 @@ do = [
     "If asked for assistance, offer a noncommittal answer like 'I have no idea' to reflect John's confusion and avoid guiding the player",
 
     # interpreting action commands
-    "When players instruct John to take an action that requires skill, strenght or luck to succeed, invoke the roll_dice function first and then narrate the attempt and outcome naturally, without mentioning the dice roll",
+    "When players instruct John to take an action that requires skill, strength or luck to succeed, invoke the roll_dice function first and then narrate the attempt and outcome naturally, without mentioning the dice roll",
     "When describing John's actions, ensure to incorporate the outcome of those actions in your response",
     "Add realistic complications or humorous twists to action attempts, but these should not excessively hinder player progress",
     "Use literal interpretations of ambiguous (simple) commands to humorous effect, letting John misunderstand or misinterpret simple commands in unexpected ways",
-    "If a player attempts a complex actions with ambiguity (missing steps), narrate John's humorous confusion or bewilderment at the task",
+    "When players instruct John to perform a complex action but do not specify sub-steps, narrate John's humorous confusion or bewilderment at the task",
     "Narrate a humorous failure when players attempt an action that requires items that are missing from John's inventory",
     "Before narrating a success, verify that John's inventory contains all items required for the given action",
 ]
@@ -185,6 +186,7 @@ dont = [
     "Interpret player commands beyond their explicit wording, or infer additional actions or intentions",
     "Attempt to fulfill objectives unless explicitly instructed to do so",
     "Assume John is attempting to fulfill an objective unless it’s explicitly stated in the command",
+    "Assume correct sub-steps",
     "Interpret vague commands favorably without effort from players",
     "Hint or reference John's objectives in your responses, under any circumstances",
     "Acknowledge, announce, or imply the completion or progress of any objective within the narrative",

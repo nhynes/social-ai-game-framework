@@ -34,7 +34,7 @@ class JohnToolProvider(ToolProvider):
                     "properties": {
                         "response": {
                             "type": "string",
-                            "description": "The narrative response or feedback to provide to the player."
+                            "description": "The narrative response or feedback to provide to the player. Ensure that your responses are consistent with the world properties, core mechanics, and interaction rules and guidelines."
                         },
                         "world_state_updates": {
                             "type": "object",

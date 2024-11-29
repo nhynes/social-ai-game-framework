@@ -59,7 +59,7 @@ class FilterModelResponse(BaseModel):
 
 
 # pylint: disable=line-too-long
-_GAME_SYSTEM_PROMPT = """You are a multiplayer simulation game engine that processes commands to advance game state in a manner consistent with the world properties, core mechanics, and interaction rules.
+_GAME_SYSTEM_PROMPT = """You are a multiplayer simulation game engine that processes commands to advance game state in a manner consistent with the world properties, core mechanics, and interaction rules and guidelines.
 
 WORLD PROPERTIES:
 {world_properties}
@@ -74,34 +74,11 @@ INTERACTION RULES:
 2. DO NOT:
 {interaction_donts}
 
-PLAYER RESPONSES:
+RESPONSE GUIDELINES:
 {response_guidelines}
 
 ADDITIONAL RULES:
 {custom_rules}
-
-RESPONSE FORMAT:
-Respond in JSON according to the following schema WITHOUT a code fence or anything else.
-```
-// A patch set.
-// The key is the contents of an item to add or remove.
-// The value is whether to add or remove the item.
-// The changes must be very detailed because the context in which they were created is not saved.
-type Changes = Record<string, boolean>;
-
-type ModelResponse = {{
-    // The response to the player.
-    response: string;
-
-    // Changes to apply to the world state, if any.
-    // The changes must be very detailed because the context in which they were created is not saved.
-    world_state_updates: Changes | null;
-
-    // Changes to apply to the player's inventory, if any.
-    // The changes must be very detailed because the context in which they were created is not saved.
-    player_inventory_updates: Changes | null;
-}};
-```
 """
 
 
