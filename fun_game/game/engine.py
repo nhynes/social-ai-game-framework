@@ -276,14 +276,21 @@ class GameEngine:
             objectives_details = "\n".join(f"- {obj.objective_text}" for obj in objectives)
             yield f"{user_header}\n{objectives_details}"
 
-    def clear_game(self) -> tuple[bool,str]:
-        with self._db.connect() as db:
-            game_id = db.create_game()
-            if not game_id:
-                return False, "Failed to create new game."
-            self._clear_cache()
-            self._load_player_inventory(user_id=0, db=db)
-        return True, "Game cleared."
+    def clear_game(self) -> dict:
+        response = "Game cleared."
+        game_was_started = self._game_started
+        if game_was_started:
+            response = "John’s adventure ends here, but the memories are forever. Thanks for playing!"
+            with self._db.connect() as db:
+                game_id = db.create_game()
+                if not game_id:
+                    return {"success":False,
+                            "game_was_started":game_was_started,
+                            "response":"Failed to create new game."}
+        self._clear_cache()
+        return {"success":True,
+                "game_was_started":game_was_started,
+                "response":response}
 
     def _clear_cache(self):
         self._objectives.clear()

@@ -46,8 +46,18 @@ class SudoCommands(commands.Cog):
         if not guild_state:
             return
 
-        success, response = guild_state.game_engine.clear_game()
-        await interaction.response.send_message(response, ephemeral=not success)
+        user_scores = guild_state.game_engine.leaderboard()
+        replies = paginate(user_scores, prefix="")
+        result = guild_state.game_engine.clear_game()
+
+        if not result["success"]:
+            await interaction.response.send_message(result["response"], ephemeral=True)
+            return
+
+        await interaction.response.send_message(result["response"], ephemeral=False)
+        if result["game_was_started"]:
+            for reply in replies:
+                await interaction.followup.send(reply, ephemeral=False)
 
     #@check_sudo()
     @game_group.command(name="start", description="Start game")
