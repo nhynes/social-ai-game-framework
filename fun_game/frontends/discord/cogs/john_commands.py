@@ -24,25 +24,6 @@ class JohnCommands(commands.Cog):
         response = await guild_state.game_engine.add_objective(objective, interaction.user.id, interaction.user.display_name)
         await interaction.response.send_message(response, ephemeral=True)
 
-    @app_commands.command(name="leaderboard", description="View the leaderboard")
-    async def leaderboard(self, interaction: discord.Interaction):
-        if not interaction.guild:
-            return
-
-        guild_state = self.bot.guild_states.get(interaction.guild.id)
-        if not guild_state:
-            return
-
-        user_scores = guild_state.game_engine.leaderboard()
-        replies = paginate(user_scores, prefix="")
-
-        if not replies:
-            await interaction.response.send_message("Leaderboard is empty.", ephemeral=False)
-            return
-
-        for reply in replies:
-            await interaction.response.send_message(reply, ephemeral=False)
-
     @app_commands.command(name="bid", description="Bid to take control of John")
     async def bid(self, interaction: discord.Interaction, value: int):
         if not interaction.guild:

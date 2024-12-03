@@ -271,9 +271,9 @@ class GameEngine:
         )
 
         for cnt, (upstream_user_id, objectives) in enumerate(sorted_leaderboard, start=1):
-            total_score = sum(obj.score for obj in objectives)
-            user_header = f"\u200b{cnt}. <@{upstream_user_id}>, Total Score: {total_score}"
-            objectives_details = "\n".join(f"- ||{obj.objective_text}||, Score: {obj.score}" for obj in objectives)
+            # total_score = sum(obj.score for obj in objectives)
+            user_header = f"\u200b{cnt}. <@{upstream_user_id}>"
+            objectives_details = "\n".join(f"- {obj.objective_text}" for obj in objectives)
             yield f"{user_header}\n{objectives_details}"
 
     def clear_game(self) -> tuple[bool,str]:

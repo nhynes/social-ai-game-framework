@@ -66,6 +66,27 @@ class SudoCommands(commands.Cog):
             await interaction.response.send_message(response, ephemeral=True)
 
     @check_sudo()
+    @game_group.command(name="leaderboard", description="Show player objectives")
+    async def leaderboard(self, interaction: discord.Interaction):
+        if not interaction.guild:
+            return
+
+        guild_state = self.bot.guild_states.get(interaction.guild.id)
+        if not guild_state:
+            return
+
+        user_scores = guild_state.game_engine.leaderboard()
+        replies = paginate(user_scores, prefix="")
+
+        if not replies:
+            await interaction.response.send_message("Leaderboard is empty.", ephemeral=False)
+            return
+
+        await interaction.response.send_message(replies[0], ephemeral=False)
+        for reply in replies[1:]:
+            await interaction.followup.send(reply, ephemeral=False)
+
+    @check_sudo()
     @bidding_group.command(name="start", description="Start bidding auction")
     async def start_bidding(self, interaction: discord.Interaction):
         if not interaction.guild:
