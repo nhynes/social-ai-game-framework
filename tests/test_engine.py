@@ -67,10 +67,10 @@ def mock_ai():
 
 
 @pytest.fixture
-def game_engine(mock_config, mock_db, mock_ai):
+async def game_engine(mock_config, mock_db, mock_ai):
     engine = GameEngine(mock_config, "test_instance", ai=mock_ai, db=mock_db)
-    if not engine._bidding_context.disabled:
-        engine.toggle_bidding()
+    if not engine._bidding_manager._disabled:
+        await engine.toggle_bidding()
     return engine
 
 

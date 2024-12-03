@@ -1,10 +1,14 @@
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 import random
+import asyncio
 import anthropic.types
+
+from .utils import timer
 
 if TYPE_CHECKING:
     from .engine import GameEngine
+
 
 class ToolProvider(ABC):
 
@@ -86,5 +90,5 @@ class JohnToolProvider(ToolProvider):
         success = random.choice([True, False])
         print("\nCalled ROLL DICE --> ", success)
         if not success:
-            self._game_engine.start_bidding(delay=10)
+            asyncio.create_task(timer(timeout=8, handler=self._game_engine.start_bidding))
         return f"success: {success}"

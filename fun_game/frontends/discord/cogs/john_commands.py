@@ -21,8 +21,8 @@ class JohnCommands(commands.Cog):
             await interaction.response.send_message("You need to specify an objective.", ephemeral=True)
             return
 
-        await guild_state.game_engine.add_objective(objective, interaction.user.id, interaction.user.display_name)
-        await interaction.response.send_message("Objective noted!", ephemeral=True)
+        response = await guild_state.game_engine.add_objective(objective, interaction.user.id, interaction.user.display_name)
+        await interaction.response.send_message(response, ephemeral=True)
 
     @app_commands.command(name="leaderboard", description="View the leaderboard")
     async def leaderboard(self, interaction: discord.Interaction):
@@ -52,7 +52,7 @@ class JohnCommands(commands.Cog):
         if not guild_state:
             return
 
-        _, response = await guild_state.game_engine.add_bid(value, interaction.user.id)
+        response = await guild_state.game_engine.add_bid(value, interaction.user.id)
         await interaction.response.send_message(response, ephemeral=True)
 
 async def setup(bot):

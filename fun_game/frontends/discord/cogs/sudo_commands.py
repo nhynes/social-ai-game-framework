@@ -63,7 +63,7 @@ class SudoCommands(commands.Cog):
         if not guild_state:
             return
 
-        response = guild_state.game_engine.start_bidding()
+        response = await guild_state.game_engine.start_bidding()
         await interaction.response.send_message(response, ephemeral=False)
 
     @bidding_group.command(name="resolve", description="Resolve bidding auction")
@@ -87,7 +87,7 @@ class SudoCommands(commands.Cog):
         if not guild_state:
             return
 
-        response = guild_state.game_engine.toggle_bidding()
+        response = await guild_state.game_engine.toggle_bidding()
         await interaction.response.send_message(response, ephemeral=False)
 
     @rule_group.command(name="show")
