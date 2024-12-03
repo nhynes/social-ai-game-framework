@@ -1,5 +1,4 @@
 from typing import Iterable
-
 from discord import app_commands
 from discord.ext import commands
 import discord
@@ -8,6 +7,16 @@ from fun_game.frontends.discord.bot import Bot
 
 from .utils import paginate
 
+
+def check_sudo():
+    async def predicate(interaction: discord.Interaction) -> bool:
+        if (interaction.user.guild_permissions.administrator or
+            any(role.permissions.manage_guild or role.name == "Privileged Player"
+                for role in interaction.user.roles)):
+            return True
+        await interaction.response.send_message("You do not have permission to use this command.", ephemeral=True)
+        return False
+    return app_commands.check(predicate)
 
 class SudoCommands(commands.Cog):
     def __init__(self, bot: Bot):
@@ -27,6 +36,7 @@ class SudoCommands(commands.Cog):
         name="game", parent=sudo_group, description="Manage game"
     )
 
+    @check_sudo()
     @game_group.command(name="clear", description="Reset game state")
     async def clear_game(self, interaction: discord.Interaction):
         if not interaction.guild:
@@ -39,6 +49,7 @@ class SudoCommands(commands.Cog):
         success, response = guild_state.game_engine.clear_game()
         await interaction.response.send_message(response, ephemeral=not success)
 
+    #@check_sudo()
     @game_group.command(name="start", description="Start game")
     async def start_game(self, interaction: discord.Interaction):
         if not interaction.guild:
@@ -54,6 +65,7 @@ class SudoCommands(commands.Cog):
         else:
             await interaction.response.send_message(response, ephemeral=True)
 
+    @check_sudo()
     @bidding_group.command(name="start", description="Start bidding auction")
     async def start_bidding(self, interaction: discord.Interaction):
         if not interaction.guild:
@@ -66,6 +78,7 @@ class SudoCommands(commands.Cog):
         response = await guild_state.game_engine.start_bidding()
         await interaction.response.send_message(response, ephemeral=False)
 
+    @check_sudo()
     @bidding_group.command(name="resolve", description="Resolve bidding auction")
     async def resolve_bidding(self, interaction: discord.Interaction):
         if not interaction.guild:
@@ -78,6 +91,7 @@ class SudoCommands(commands.Cog):
         response = await guild_state.game_engine.resolve_bidding()
         await interaction.response.send_message(response, ephemeral=True)
 
+    @check_sudo()
     @bidding_group.command(name="toggle", description="Enable or disable bidding")
     async def bidding_toggle(self, interaction: discord.Interaction):
         if not interaction.guild:
@@ -90,9 +104,9 @@ class SudoCommands(commands.Cog):
         response = await guild_state.game_engine.toggle_bidding()
         await interaction.response.send_message(response, ephemeral=False)
 
+    @check_sudo()
     @rule_group.command(name="show")
     async def show_rules(self, interaction: discord.Interaction):
-        # TODO: restrict this to admins?
         if not interaction.guild:
             return
 
@@ -116,6 +130,7 @@ class SudoCommands(commands.Cog):
         for reply in replies:
             await interaction.response.send_message(reply, ephemeral=True)
 
+    @check_sudo()
     @rule_group.command(name="add")
     async def add_rule(
         self,
@@ -138,6 +153,7 @@ class SudoCommands(commands.Cog):
                 f"Successfully created rule #{rule_id}", ephemeral=True
             )
 
+    @check_sudo()
     @rule_group.command(name="remove")
     async def remove_rule(self, interaction: discord.Interaction, rules: str):
         if not interaction.guild:
@@ -158,10 +174,12 @@ class SudoCommands(commands.Cog):
                 f"Failed to understand rules. Please format as comma-separated numbers or ranges"
             )
 
+    @check_sudo()
     @state_group.command(name="add")
     async def add_state(self, interaction: discord.Interaction, state: str):
         await interaction.response.send_message("Unimplemented")
 
+    @check_sudo()
     @state_group.command(name="remove")
     async def remove_state(self, interaction: discord.Interaction, state: str):
         await interaction.response.send_message("Unimplemented")

@@ -6,6 +6,7 @@ from typing import Callable
 
 import discord
 from discord.ext import commands
+from discord import app_commands
 
 from fun_game.config import DiscordFrontendConfig
 from fun_game.game.engine import GameEngine
@@ -53,7 +54,14 @@ class Bot(commands.Bot):
             "frontends.discord.cogs.reaction_handler",
         ]:
             await self.load_extension(ext)
+        self.tree.error(self.on_app_command_error)
         await self.tree.sync()
+
+    async def on_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        if isinstance(error, app_commands.CheckFailure):
+            return  # silent
+        logger.error(f"Unexpected error: {error}")
+        await interaction.response.send_message("Sorry, something went wrong.", ephemeral=True)
 
     async def on_ready(self):
         logger.info("Bot connected as %s", self.user)
