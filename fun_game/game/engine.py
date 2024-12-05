@@ -32,7 +32,7 @@ class GameEngine:
     @classmethod
     def make_factory(cls, config: GameConfig) -> Callable[[str, GameChannel], "GameEngine"]:
         def _factory(instance_id: str, game_channel: GameChannel) -> "GameEngine":
-            db = Database(f"data/{instance_id}.sqlite")
+            db = Database(f"data/{instance_id}-john.sqlite")
             ai = AIProvider.default()
             game_engine = cls(config, instance_id, ai=ai, db=db, tool_provider=None, game_channel=game_channel)
             game_engine._tool_provider = JohnToolProvider(game_engine)
