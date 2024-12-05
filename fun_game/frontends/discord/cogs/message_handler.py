@@ -1,4 +1,5 @@
 import asyncio
+from collections import defaultdict
 import logging
 
 from typing import Iterable
@@ -16,7 +17,7 @@ logger.setLevel(logging.DEBUG)
 class MessageHandler(commands.Cog):
     def __init__(self, bot: Bot):
         self.bot: Bot = bot
-        self._processing = False
+        self._processing: dict[int, bool] = defaultdict(bool)
 
     @commands.Cog.listener()
     async def on_message(self, message):
@@ -30,9 +31,9 @@ class MessageHandler(commands.Cog):
         ):
             return
         await guild_state.message_queue.put(message)
-        if not self._processing:
+        if not self._processing[message.guild.id]:
             self.bot.loop.create_task(self.process_messages(message.guild.id))
-            self._processing = True
+            self._processing[message.guild.id] = True
 
     async def process_messages(self, guild_id: int):
         guild_state = self.bot.guild_states[guild_id]
