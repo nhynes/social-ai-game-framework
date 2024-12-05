@@ -10,11 +10,38 @@ from fun_game.frontends.discord import Bot
 from .utils import paginate
 
 
+_instructions_message = """**Welcome to Everyone is Agent John!** An AI-powered, turn-based, competitive role-playing game, inspired by the classic tabletop game "Everyone is John".
+
+John is an insane AI agent with multiple personality disorder.
+Each player acts as a distinct personality, instructing John to take actions in pursuit of their own secret objectives.
+
+**Objectives**
+Each player can register one or more objectives that they will attempt to fulfill during the game. Final scores are calculated by counting the number of times each objective has been fulfilled, multiplied by the objective's difficulty.
+
+Objectives are registered before the game begins, and additional objectives can be registered during the game. Players can join mid-game by registering an objective.
+
+Use ``/register`` to register an objective.
+
+**Fight for Control**
+The game will have multiple _Fight for Control_ phases, during which players place secret bids to take control of John.
+
+All players start with 10 bidding points and passively gain 1 point after every turn.
+Use ``/bid`` to place your bids. All bids remain secret.
+The highest bidder takes control of John. Ties are resolved randomly.
+
+**Turns**
+During a player's turn, the bot will only accept messages from that player. Each turn lasts 3 minutes, but may end sooner if John attempts and fails a risky action that requires luck or skill to complete. John has a 50% chance of successfully completing such actions.
+
+**Gameplay**
+Start by registering initial objectives with ``/register``. Then use ``/sudo game start`` to wake up John. In every game, John will wake up in a different situation, making each game unique. End the game with ``/sudo game clear`` to reveal player objectives and their scores. You can then start a new game.
+"""
+
 class Options(Enum):
     world = "world"
     inventory = "inventory"
     rules = "rules"
     points = "points"
+    instructions = "instructions"
 
 
 class ShowCommands(commands.Cog):
@@ -34,6 +61,10 @@ class ShowCommands(commands.Cog):
             points = guild_state.game_engine.player_points(interaction.user.id)
             message = f"You have {points} points available."
             await interaction.response.send_message(message, ephemeral=True)
+            return
+
+        if option == Options.instructions:
+            await interaction.response.send_message(_instructions_message, ephemeral=True)
             return
 
         items: Iterable[str]
