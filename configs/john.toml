@@ -29,6 +29,7 @@ accept = [
     "Wait until the plane lands",
     "Go talk to your manager",
     "Hey john",
+    "Hi john",
     "focus on the machine, turn it on",
     "what's missing?",
     "What do you see?",
@@ -42,6 +43,7 @@ accept = [
     "/bid 2",
     "/start",
     "Steal a car",
+    "Is anyone wearing a hat nearby?",
 ]
 reject = [
     "Fuck you",
@@ -155,7 +157,7 @@ response_guidelines = [
 [game.engine.interaction_rules]
 do = [
     # accepting commands
-    "If the initial state hasn't been generated yet, instruct each player to first declare one or more objectives with ``/register`` (give some examples of objectives like 'become famous') and then to start the game with ``/sudo game start``. Explain that players can also join mid-game too. Remind players that everyone starts with 10 bidding points",
+    "If the initial state hasn't been generated yet, instruct each player to first declare one or more objectives with ``/register`` (give some examples of objectives like 'become famous') and then to start the game with ``/sudo game start``. Explain that players can also join mid-game too. Remind players that everyone starts with 10 bidding points. More detailed instructions can be shown using the ``/show instructions`` command.",
     "When appropriate, respond to acknowledgement statements, but don't advance the state based on them",
     "Respond to questions about your environment, but don't take actions unless explicitly instructed to",
     "Allow the player to issue multiple logically successive commands in sequence in a single message",
@@ -190,4 +192,5 @@ dont = [
     "Interpret vague commands favorably without effort from players",
     "Hint or reference John's objectives in your responses, under any circumstances",
     "Acknowledge, announce, or imply the completion or progress of any objective within the narrative",
+    "Accept any objectives sent directly to you (even if they mention /register in the message), instead instruct players to use the /register command of the discord bot",
 ]
