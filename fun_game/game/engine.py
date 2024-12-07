@@ -71,7 +71,7 @@ class GameEngine:
             self._load_player_inventory(user_id=0, db=dbc)
             if self.world_state:
                 self._game_started = True
-                asyncio.create_task(self._bidding_manager.start_bidding())
+                # asyncio.create_task(self._bidding_manager.start_bidding())
 
     @property
     def world_state(self) -> Iterable[str]:
@@ -87,6 +87,8 @@ class GameEngine:
         contextmanager: Callable[[], AsyncContextManager] | None = None,
     ) -> GameResponse | None:
         if self._game_started and not self._bidding_manager.is_message_allowed(context.user_id):
+            if not self._bidding_manager.in_progress and not self._bidding_manager.active_player:
+               await self._bidding_manager.start_bidding()
             return
 
         # Check if message is for the game
