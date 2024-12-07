@@ -245,8 +245,8 @@ class GameEngine:
                 del self._custom_rules[rule_id]
 
     async def add_objective(self, objective: str, user_upstream_id: int, user_name: str = "<unknown>") -> str:
-        if self._bidding_manager.in_progress:
-            return "Can't add objectives during bidding phase."
+        # if self._bidding_manager.in_progress:
+        #     return "Can't add objectives during bidding phase."
         if self._bidding_manager.active_player == user_upstream_id:
             return "Can't add objectives during your turn."
 
